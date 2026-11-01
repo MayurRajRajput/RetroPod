@@ -18,7 +18,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+// Explicit Navigation Import
 import androidx.navigation.NavController
+
 import com.retropod.player.ui.components.GlassCard
 import com.retropod.player.ui.components.VerticalSlider
 import com.retropod.player.ui.components.WaveVisualizer

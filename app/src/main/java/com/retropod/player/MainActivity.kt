@@ -20,7 +20,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.navigation.compose.*
+
+// Explicit Navigation Imports
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
+
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.retropod.player.ui.theme.RetroPodTheme
