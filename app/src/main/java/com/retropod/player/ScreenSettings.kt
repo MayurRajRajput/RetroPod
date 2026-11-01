@@ -160,7 +160,7 @@ private fun AppearancePage(state: AppState) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Your name", color = White, fontSize = 15.sp)
             OutlinedTextField(
-                value = state.userName, onValueChange = { state.setUserName(it.take(24)) }, singleLine = true,
+                value = state.userName, onValueChange = { state.updateUserName(it.take(24)) }, singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedTextColor = White, unfocusedTextColor = White, focusedBorderColor = Accent, unfocusedBorderColor = Muted
                 )
@@ -177,7 +177,7 @@ private fun AppearancePage(state: AppState) {
                         Box(
                             Modifier.size(40.dp).clip(CircleShape).background(color)
                                 .border(if (Pal.accentIndex == index) 3.dp else 1.dp, if (Pal.accentIndex == index) White else Color(0x44FFFFFF), CircleShape)
-                                .clickable { state.setAccent(index); state.tick() }
+                                .clickable { state.updateAccent(index); state.tick() }
                         )
                         Text(name, color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
                     }
@@ -186,18 +186,18 @@ private fun AppearancePage(state: AppState) {
         }
     }
     SettingsCard {
-        ToggleRow("Waveform seek bar", "Use the animated wave in Now Playing instead of a plain slider", state.waveformSeek, state::setWaveformSeek)
+        ToggleRow("Waveform seek bar", "Use the animated wave in Now Playing instead of a plain slider", state.waveformSeek, state::updateWaveformSeek)
     }
 }
 
 @Composable
 private fun PlaybackPage(state: AppState) {
     SettingsCard {
-        ToggleRow("Resume last session", "Reopen your queue paused at the last position", state.resumeSession, state::setResumeSession)
+        ToggleRow("Resume last session", "Reopen your queue paused at the last position", state.resumeSession, state::updateResumeSession)
         HorizontalDivider(color = Color(0x14FFFFFF))
-        ToggleRow("Skip silence", "Trim silent gaps inside tracks", state.skipSilence, state::setSkipSilence)
+        ToggleRow("Skip silence", "Trim silent gaps inside tracks", state.skipSilence, state::updateSkipSilence)
         HorizontalDivider(color = Color(0x14FFFFFF))
-        ToggleRow("Pause when headphones unplug", "Stops playback if the output disconnects", state.pauseOnUnplug, state::setPauseOnUnplug)
+        ToggleRow("Pause when headphones unplug", "Stops playback if the output disconnects", state.pauseOnUnplug, state::updatePauseOnUnplug)
     }
     Text("Tracks on the same album play back-to-back without gaps when the file format allows it.", color = Muted, fontSize = 12.sp)
 }
@@ -242,7 +242,7 @@ private fun LibraryPage(state: AppState) {
             Text("Hide short tracks", color = White, fontSize = 15.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0 to "Off", 30 to "< 30s", 60 to "< 60s").forEach { (seconds, label) ->
-                    RetroChip(label, state.minTrackSeconds == seconds, { state.setMinTrackSeconds(seconds); state.tick() })
+                    RetroChip(label, state.minTrackSeconds == seconds, { state.updateMinTrackSeconds(seconds); state.tick() })
                 }
             }
             Text("Useful for hiding ringtones and voice notes.", color = Muted, fontSize = 12.sp)
@@ -259,7 +259,7 @@ private fun LibraryPage(state: AppState) {
                 )
             )
             Text("Separate folder names with commas. Any song whose path contains one is hidden.", color = Muted, fontSize = 12.sp)
-            TextButton(onClick = { state.setExcludedFolders(folders); state.toast("Library updated.") }) { Text("Apply", color = Accent) }
+            TextButton(onClick = { state.updateExcludedFolders(folders); state.toast("Library updated.") }) { Text("Apply", color = Accent) }
         }
     }
 }
@@ -267,11 +267,11 @@ private fun LibraryPage(state: AppState) {
 @Composable
 private fun ExperiencePage(state: AppState) {
     SettingsCard {
-        ToggleRow("Haptic feedback", "Subtle tactile response on controls and gestures", state.hapticsEnabled, state::setHaptics)
+        ToggleRow("Haptic feedback", "Subtle tactile response on controls and gestures", state.hapticsEnabled, state::updateHaptics)
         HorizontalDivider(color = Color(0x14FFFFFF))
-        ToggleRow("Interface click sounds", "Play a soft click on controls and the Cover Flow dial", state.clickSoundsEnabled, state::setClickSounds)
+        ToggleRow("Interface click sounds", "Play a soft click on controls and the Cover Flow dial", state.clickSoundsEnabled, state::updateClickSounds)
         HorizontalDivider(color = Color(0x14FFFFFF))
-        ToggleRow("Smooth animations", "Cover flow depth and screen transitions", state.animationsEnabled, state::setAnimations)
+        ToggleRow("Smooth animations", "Cover flow depth and screen transitions", state.animationsEnabled, state::updateAnimations)
     }
     SettingsCard {
         if (state.micGranted) {

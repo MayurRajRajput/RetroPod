@@ -500,29 +500,29 @@ internal class AppState(
         } catch (_: Exception) { playlists.clear(); playlistOrder.clear() }
     }
 
-    fun setUserName(value: String) { userName = value; settingsPrefs.edit().putString("user_name", value).apply() }
-    fun setHaptics(value: Boolean) { hapticsEnabled = value; settingsPrefs.edit().putBoolean("haptics", value).apply() }
-    fun setAnimations(value: Boolean) { animationsEnabled = value; settingsPrefs.edit().putBoolean("animations", value).apply() }
-    fun setClickSounds(value: Boolean) { clickSoundsEnabled = value; settingsPrefs.edit().putBoolean("click_sounds", value).apply() }
-    fun setWaveformSeek(value: Boolean) { waveformSeek = value; settingsPrefs.edit().putBoolean("waveform_seek", value).apply() }
-    fun setResumeSession(value: Boolean) { resumeSession = value; settingsPrefs.edit().putBoolean("resume_session", value).apply() }
-    fun setSkipSilence(value: Boolean) {
+    fun updateUserName(value: String) { userName = value; settingsPrefs.edit().putString("user_name", value).apply() }
+    fun updateHaptics(value: Boolean) { hapticsEnabled = value; settingsPrefs.edit().putBoolean("haptics", value).apply() }
+    fun updateAnimations(value: Boolean) { animationsEnabled = value; settingsPrefs.edit().putBoolean("animations", value).apply() }
+    fun updateClickSounds(value: Boolean) { clickSoundsEnabled = value; settingsPrefs.edit().putBoolean("click_sounds", value).apply() }
+    fun updateWaveformSeek(value: Boolean) { waveformSeek = value; settingsPrefs.edit().putBoolean("waveform_seek", value).apply() }
+    fun updateResumeSession(value: Boolean) { resumeSession = value; settingsPrefs.edit().putBoolean("resume_session", value).apply() }
+    fun updateSkipSilence(value: Boolean) {
         skipSilence = value
         settingsPrefs.edit().putBoolean("skip_silence", value).apply()
         PlaybackService.setSkipSilence(value)
     }
-    fun setPauseOnUnplug(value: Boolean) {
+    fun updatePauseOnUnplug(value: Boolean) {
         pauseOnUnplug = value
         settingsPrefs.edit().putBoolean("pause_on_unplug", value).apply()
         PlaybackService.setPauseOnUnplug(value)
     }
-    fun setAccent(index: Int) { Pal.accentIndex = index; settingsPrefs.edit().putInt("accent_index", index).apply() }
-    fun setMinTrackSeconds(value: Int) {
+    fun updateAccent(index: Int) { Pal.accentIndex = index; settingsPrefs.edit().putInt("accent_index", index).apply() }
+    fun updateMinTrackSeconds(value: Int) {
         minTrackSeconds = value
         settingsPrefs.edit().putInt("min_track_sec", value).apply()
         refreshLibrary()
     }
-    fun setExcludedFolders(value: String) {
+    fun updateExcludedFolders(value: String) {
         excludedFolders = value
         settingsPrefs.edit().putString("excluded_folders", value).apply()
         refreshLibrary()
