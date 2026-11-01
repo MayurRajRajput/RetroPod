@@ -25,6 +25,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -48,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -66,6 +68,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -211,11 +214,45 @@ private fun RetroPodScreen(
     var currentArtist by remember { mutableStateOf("Choose a song from your library") }
     var queueSongs by remember { mutableStateOf(emptyList<Song>()) }
     var currentIndex by remember { mutableIntStateOf(0) }
-    var recentIds by remember { mutableStateOf(emptyList<Long>()) }
+    var recentIds by remember {
+        mutableStateOf(
+            context.getSharedPreferences("retropod_library", Context.MODE_PRIVATE)
+                .getString("recent_ids", "")?.split(",")?.mapNotNull { it.toLongOrNull() } ?: emptyList()
+        )
+    }
+    var sleepTimerJob by remember { mutableStateOf<Job?>(null) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var favoriteIds by remember { mutableStateOf(emptySet<Long>()) }
     val playlists: SnapshotStateMap<String, MutableList<Long>> = remember { mutableStateMapOf() }
+
+    fun startSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        if (minutes > 0) {
+            sleepTimerJob = scope.launch {
+                delay(minutes * 60_000L)
+                controller?.pause()
+                Toast.makeText(context, "Sleep timer finished.", Toast.LENGTH_SHORT).show()
+                sleepTimerJob = null
+            }
+        }
+        haptic()
+    }
 
     fun haptic() {
         if (hapticsEnabled) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
+    fun loadFavorites() {
+        val prefs = context.getSharedPreferences("retropod_library", Context.MODE_PRIVATE)
+        favoriteIds = prefs.getStringSet("favorite_ids", emptySet())?.mapNotNull { it.toLongOrNull() }?.toSet() ?: emptySet()
+    }
+
+    fun toggleFavorite(song: Song) {
+        favoriteIds = if (song.id in favoriteIds) favoriteIds - song.id else favoriteIds + song.id
+        context.getSharedPreferences("retropod_library", Context.MODE_PRIVATE)
+            .edit().putStringSet("favorite_ids", favoriteIds.map { it.toString() }.toSet()).apply()
+        haptic()
     }
 
     fun loadPlaylists() {
@@ -257,6 +294,7 @@ private fun RetroPodScreen(
     }
     LaunchedEffect(Unit) {
         loadPlaylists()
+        loadFavorites()
         permissionGranted = hasPermission()
         if (permissionGranted) refreshLibrary()
     }
@@ -303,6 +341,8 @@ private fun RetroPodScreen(
         player.play()
         currentIndex = safeIndex
         recentIds = (listOf(list[safeIndex].id) + recentIds.filterNot { it == list[safeIndex].id }).take(30)
+        context.getSharedPreferences("retropod_library", Context.MODE_PRIVATE)
+            .edit().putString("recent_ids", recentIds.joinToString(",")).apply()
         showPlayer = true
         haptic()
     }
@@ -378,6 +418,7 @@ private fun RetroPodScreen(
                     when (tab) {
                         LibraryTab.HOME -> Box(Modifier.weight(1f).fillMaxWidth()) { HomeScreen(
                             songs = songs, albums = albums, recentIds = recentIds,
+                            favoriteSongs = songs.filter { it.id in favoriteIds },
                             onPlay = { song -> playFrom(songs.indexOf(song), songs) },
                             onOpenSongs = { tab = LibraryTab.SONGS },
                             onOpenAlbums = { tab = LibraryTab.ALBUMS },
@@ -459,12 +500,36 @@ private fun RetroPodScreen(
                                     .padding(horizontal = 9.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(if (index == currentIndex) "♫" else "${index + 1}", color = Accent, modifier = Modifier.width(28.dp))
-                                Column(Modifier.weight(1f)) {
+                                Text(if (index == currentIndex) "♫" else "${index + 1}", color = Accent, modifier = Modifier.width(25.dp))
+                                Column(Modifier.weight(1f).clickable { controller?.seekTo(index, 0L); showQueue = false }) {
                                     Text(song.title, color = White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(song.artist, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                                if (index == currentIndex) Text("PLAYING", color = Accent, fontSize = 9.sp)
+                                if (index == currentIndex) {
+                                    Text("PLAYING", color = Accent, fontSize = 8.sp)
+                                } else {
+                                    Row {
+                                        IconButton(enabled = index > 0, onClick = {
+                                            controller?.moveMediaItem(index, index - 1)
+                                            queueSongs = queueSongs.toMutableList().also { list -> list.add(index - 1, list.removeAt(index)) }
+                                        }, modifier = Modifier.size(30.dp)) {
+                                            Icon(Icons.Default.KeyboardArrowUp, "Move up", tint = White)
+                                        }
+                                        IconButton(enabled = index < queueSongs.lastIndex, onClick = {
+                                            controller?.moveMediaItem(index, index + 1)
+                                            queueSongs = queueSongs.toMutableList().also { list -> list.add(index + 1, list.removeAt(index)) }
+                                        }, modifier = Modifier.size(30.dp)) {
+                                            Icon(Icons.Default.KeyboardArrowDown, "Move down", tint = White)
+                                        }
+                                        IconButton(onClick = {
+                                            controller?.removeMediaItem(index)
+                                            queueSongs = queueSongs.toMutableList().also { it.removeAt(index) }
+                                            if (queueSongs.isEmpty()) showQueue = false
+                                        }, modifier = Modifier.size(30.dp)) {
+                                            Icon(Icons.Default.Close, "Remove", tint = Muted)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -483,7 +548,32 @@ private fun RetroPodScreen(
                     context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).edit().putBoolean("animations", it).apply()
                 },
                 onRescan = { refreshLibrary(); showSettings = false },
+                onSleepTimer = { showSleepTimerDialog = true },
                 onDismiss = { showSettings = false }
+            )
+        }
+        if (showSleepTimerDialog) {
+            AlertDialog(
+                onDismissRequest = { showSleepTimerDialog = false },
+                containerColor = SurfaceNight,
+                title = { Text("Sleep timer", color = White) },
+                text = {
+                    Column {
+                        listOf(15, 30, 45, 60).forEach { minutes ->
+                            TextButton(onClick = {
+                                startSleepTimer(minutes)
+                                showSleepTimerDialog = false
+                                Toast.makeText(context, "Music will stop in $minutes minutes.", Toast.LENGTH_SHORT).show()
+                            }) { Text("$minutes minutes", color = White) }
+                        }
+                        TextButton(onClick = {
+                            startSleepTimer(0)
+                            showSleepTimerDialog = false
+                            Toast.makeText(context, "Sleep timer cancelled.", Toast.LENGTH_SHORT).show()
+                        }) { Text("Turn off timer", color = Accent) }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showSleepTimerDialog = false }) { Text("Close", color = Muted) } }
             )
         }
         if (showCreatePlaylist) {
@@ -520,6 +610,8 @@ private fun RetroPodScreen(
         if (showSongMenu && menuSong != null) {
             SongActionsDialog(
                 song = menuSong!!, playlistNames = playlists.keys.toList(),
+                isFavorite = menuSong!!.id in favoriteIds,
+                onFavorite = { toggleFavorite(menuSong!!); showSongMenu = false },
                 onAdd = { name -> addSongToPlaylist(menuSong!!, name); showSongMenu = false },
                 onDetails = { showTrackDetails = menuSong; showSongMenu = false },
                 onShare = {
@@ -557,6 +649,7 @@ private fun RetroPodScreen(
 @Composable
 private fun HomeScreen(
     songs: List<Song>, albums: List<Pair<String, List<Song>>>, recentIds: List<Long>,
+    favoriteSongs: List<Song>,
     onPlay: (Song) -> Unit, onOpenSongs: () -> Unit, onOpenAlbums: () -> Unit,
     onOpenPlaylists: () -> Unit
 ) {
@@ -596,8 +689,20 @@ private fun HomeScreen(
         } else {
             items(recent) { song -> SongRow(song, onClick = { onPlay(song) }, onMore = {}) }
         }
-        item { SectionHeader("Explore your music", "From your library") }
-        items(songs.takeLast(8).reversed()) { song -> SongRow(song, onClick = { onPlay(song) }, onMore = {}) }
+        item { SectionHeader("Favorites", "${favoriteSongs.size} saved") }
+        if (favoriteSongs.isEmpty()) {
+            item {
+                Text("Long-press any song and choose Add to favorites.", color = Muted, fontSize = 12.sp)
+            }
+        } else {
+            items(favoriteSongs.take(8), key = { "favorite_${it.id}" }) { song ->
+                SongRow(song, onClick = { onPlay(song) }, onMore = {})
+            }
+        }
+        item { SectionHeader("Recently added", "Your local collection") }
+        items(songs.takeLast(8).reversed(), key = { "added_${it.id}" }) { song ->
+            SongRow(song, onClick = { onPlay(song) }, onMore = {})
+        }
     }
 }
 
@@ -881,6 +986,24 @@ private fun FullPlayer(
             animationSpec = tween(240, easing = FastOutSlowInEasing),
             label = "playbackProgress"
         )
+        Canvas(Modifier.fillMaxWidth().height(24.dp)) {
+            val count = 52
+            val gap = 3.dp.toPx()
+            val barWidth = ((size.width - gap * (count - 1)) / count).coerceAtLeast(1f)
+            for (i in 0 until count) {
+                val seed = ((i * 37) % 19) / 19f
+                val height = (5f + seed * 17f)
+                val x = i * (barWidth + gap) + barWidth / 2f
+                val played = i.toFloat() / count <= animatedProgress
+                drawLine(
+                    color = if (played) Accent else Muted.copy(alpha = 0.38f),
+                    start = Offset(x, size.height / 2f - height / 2f),
+                    end = Offset(x, size.height / 2f + height / 2f),
+                    strokeWidth = barWidth,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            }
+        }
         Slider(
             value = animatedProgress,
             onValueChange = { if (duration > 0) onSeek((it * duration).toLong()) },
@@ -923,7 +1046,7 @@ private fun FullPlayer(
 private fun SettingsDialog(
     haptics: Boolean, onHaptics: (Boolean) -> Unit,
     animations: Boolean, onAnimations: (Boolean) -> Unit,
-    onRescan: () -> Unit, onDismiss: () -> Unit
+    onRescan: () -> Unit, onSleepTimer: () -> Unit, onDismiss: () -> Unit
 ) {
     // Dedicated full-screen settings destination; intentionally not an AlertDialog.
     Surface(
@@ -949,6 +1072,21 @@ private fun SettingsDialog(
             SettingSwitch("Haptic feedback", "Subtle tactile response on controls and gestures", haptics, onHaptics)
             Divider(color = Color.White.copy(alpha = .08f))
             SettingSwitch("Smooth animations", "Cover flow and screen transitions", animations, onAnimations)
+            Spacer(Modifier.height(12.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .clickable(onClick = onSleepTimer)
+                    .background(SurfaceNight).padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Bedtime, null, tint = Accent)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Sleep timer", color = White, fontWeight = FontWeight.Medium)
+                    Text("Stop playback after 15, 30, 45, or 60 minutes", color = Muted, fontSize = 11.sp)
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = Muted)
+            }
             Spacer(Modifier.height(24.dp))
             Text("MUSIC LIBRARY", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
             Spacer(Modifier.height(10.dp))
@@ -990,8 +1128,8 @@ private fun SettingSwitch(title: String, subtitle: String, checked: Boolean, onC
 
 @Composable
 private fun SongActionsDialog(
-    song: Song, playlistNames: List<String>, onAdd: (String) -> Unit,
-    onDetails: () -> Unit, onShare: () -> Unit, onDismiss: () -> Unit,
+    song: Song, playlistNames: List<String>, isFavorite: Boolean, onFavorite: () -> Unit,
+    onAdd: (String) -> Unit, onDetails: () -> Unit, onShare: () -> Unit, onDismiss: () -> Unit,
     onCreatePlaylist: () -> Unit
 ) {
     AlertDialog(
@@ -999,6 +1137,11 @@ private fun SongActionsDialog(
         title = { Text(song.title, color = White, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onFavorite) {
+                    Icon(if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null, tint = Accent)
+                    Spacer(Modifier.width(10.dp))
+                    Text(if (isFavorite) "Remove from favorites" else "Add to favorites", color = White)
+                }
                 TextButton(onClick = onDetails) { Icon(Icons.Default.Info, null, tint = Accent); Spacer(Modifier.width(10.dp)); Text("Track details", color = White) }
                 TextButton(onClick = onShare) { Icon(Icons.Default.Share, null, tint = Accent); Spacer(Modifier.width(10.dp)); Text("Share", color = White) }
                 Divider(color = Muted.copy(alpha = .2f))
