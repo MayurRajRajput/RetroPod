@@ -33,3 +33,7 @@ See `STAGE-5-PLAYLIST-QUEUE.md` for the new playlist editing and queue controls,
 
 ## Step 6 — Audio features
 See `STAGE-6-AUDIO.md` for implemented equalizer integration and outstanding audio tasks.
+
+
+## Step 7 — Background playback and restoration
+See `STAGE-7-BACKGROUND-PLAYBACK.md` for MediaSession service persistence, paused restoration, and testing limitations.

@@ -1,0 +1,18 @@
+RETROPOD 2.0 PROJECT CONTENTS
+
+Included:
+- MainActivity.kt: Compose UI, library scanning, search, A-Z navigation, playlists, settings, album swipe, player controls.
+- PlaybackService.kt: Media3 ExoPlayer and MediaSession background playback; in-app volume bridge.
+- Song.kt: local audio track model.
+- RetroPodApplication.kt: application class.
+- AndroidManifest.xml: audio/media permissions, launcher activity, playback service.
+- Gradle build files and GitHub Actions workflow.
+- Adaptive and density-specific RetroPod launcher icons.
+- Four fallback album-art images.
+
+Build:
+GitHub Actions installs Gradle 8.9 and Java 17 and creates app-debug.apk.
+See README.md for exact steps and testing notes.
+
+Caveat:
+This source archive has not been compiled in an Android SDK environment here. The first GitHub Actions run is the build verification gate.

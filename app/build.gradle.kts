@@ -11,7 +11,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 6
-        versionName = "2.4.6-stage6"
+        versionName = "2.4.7-stage7"
     }
     buildFeatures { compose = true }
     compileOptions {

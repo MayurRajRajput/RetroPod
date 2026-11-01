@@ -287,7 +287,21 @@ private fun RetroPodScreen(
                 currentTitle = player.mediaMetadata.title?.toString() ?: "Nothing playing"
                 currentArtist = player.mediaMetadata.artist?.toString() ?: "Choose a song from your library"
                 currentIndex = player.currentMediaItemIndex.coerceAtLeast(0)
-                
+                // Rebuild the visible queue from the MediaSession after reconnecting,
+                // including a queue restored by PlaybackService after process death.
+                val restoredQueue = (0 until player.mediaItemCount).mapNotNull { index ->
+                    val item = player.getMediaItemAt(index)
+                    val uri = item.localConfiguration?.uri ?: return@mapNotNull null
+                    Song(
+                        id = item.mediaId.toLongOrNull() ?: uri.lastPathSegment?.toLongOrNull() ?: index.toLong(),
+                        title = item.mediaMetadata.title?.toString() ?: "Unknown title",
+                        artist = item.mediaMetadata.artist?.toString() ?: "Unknown artist",
+                        album = item.mediaMetadata.albumTitle?.toString() ?: "Unknown album",
+                        durationMs = queueSongs.firstOrNull { it.id == (item.mediaId.toLongOrNull() ?: uri.lastPathSegment?.toLongOrNull() ?: index.toLong()) }?.durationMs ?: 0L,
+                        uri = uri
+                    )
+                }
+                if (restoredQueue != queueSongs) queueSongs = restoredQueue
             }
             delay(300)
         }

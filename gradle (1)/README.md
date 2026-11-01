@@ -1,0 +1,1 @@
+RetroPod's cloud build provisions Gradle 8.9 with gradle/actions/setup-gradle in .github/workflows/build-apk.yml. A Gradle Wrapper JAR is therefore not required for the supported GitHub Actions build. Root and app Gradle build scripts are included.

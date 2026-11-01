@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="launcher_background">#000000</color>
+    <color name="retropod_black">#000000</color>
+    <color name="retropod_purple">#E8E8E8</color>
+</resources>
