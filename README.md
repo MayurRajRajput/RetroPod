@@ -1,19 +1,19 @@
-# RetroPod 2.0
+# RetroPod 2.1 — Modern Monochrome
 
-Android local music player built with Kotlin, Jetpack Compose and AndroidX Media3.
+This project is based on the newly supplied RetroPod-main project. Existing MediaStore scanning, album artwork extraction, Compose player UI and Media3 playback service are retained.
 
-## Playback lifecycle
-- Playback is owned by a `MediaSessionService`, not by the Activity.
-- Dismissing the app UI / locking the phone does not intentionally stop active playback.
-- The active song and playback position are checkpointed while playing and when the player state changes.
-- If Android later destroys the playback service, the next app launch restores the last selected track at its saved position in a paused state. It does not unexpectedly auto-play.
-- Pausing from the notification keeps the last track available for the next launch.
+## Changes in this source update
+- Pure black AMOLED background and restrained silver/white controls (purple/blue tint removed).
+- Search field is hidden until the search icon is tapped.
+- Settings entry point in the app header.
+- Song rows no longer show track numbering and include compact artwork.
+- Reduced player artwork height and removed the promotional footer / swipe prompt.
+- Updated app version to 2.1.0.
+- Existing Cover Flow pager remains dot-free; no page-indicator dots are added.
+- Media3 playback service retains last-track/position checkpoint and paused restoration behavior.
 
 ## Build
-The GitHub Actions workflow uses Java 17 and Gradle 8.9 and runs `:app:assembleDebug`.
-Push to `main` or manually run the workflow, then download the `RetroPod-debug-apk` artifact.
+GitHub Actions uses Java 17 and Gradle 8.9. Push the extracted project to your repository and check the Actions run for `:app:assembleDebug`.
 
-## Important scope and verification
-This ZIP is based on the supplied `RetroPod-master.zip`. It includes the playback-state persistence change and retains the existing app source and playback architecture. The supplied source did not contain a Cover Flow page-indicator dot row, so no such indicator was added. This ZIP does not magically include the full visual redesign or every optional feature discussed in design mockups (for example lyrics, sleep timer, and a full equalizer); those require additional implementation.
-
-The archive is integrity-checked, but an Android Gradle build and on-device test have not been run in this environment. Confirm that GitHub Actions succeeds, then test library permissions, playback, notification controls, screen locking, dismissing the app from recents, and reopening after service/process recreation before treating this as a verified release.
+## Verification
+The ZIP archive is integrity-checked. This environment cannot run an Android SDK/Gradle build or device tests. This update is a source/UI refinement, not a claim that every requested advanced feature (persistent playlist editor, equalizer DSP, lyrics provider, sleep timer, animated waveform, gesture-driven A–Z index and Cover Flow click effects) has been implemented. Verify the build and app behavior on-device before replacing your current install.

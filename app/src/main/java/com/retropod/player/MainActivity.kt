@@ -56,11 +56,11 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
-private val Night = Color(0xFF090B12)
-private val SurfaceNight = Color(0xFF171B27)
-private val Mint = Color(0xFFB8F2D5)
-private val Muted = Color(0xFF9299AA)
-private val White = Color(0xFFF4F2EC)
+private val Night = Color(0xFF000000)
+private val SurfaceNight = Color(0xFF151515)
+private val Mint = Color(0xFFE6E6E6)
+private val Muted = Color(0xFF929292)
+private val White = Color(0xFFF5F5F5)
 
 class MainActivity : ComponentActivity() {
     private var controller by mutableStateOf<MediaController?>(null)
@@ -126,8 +126,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = android.graphics.Color.rgb(9, 11, 18)
-        window.navigationBarColor = android.graphics.Color.rgb(9, 11, 18)
+        window.statusBarColor = android.graphics.Color.BLACK
+        window.navigationBarColor = android.graphics.Color.BLACK
         setContent {
             RetroPodTheme {
                 RetroPodScreen(
@@ -171,6 +171,7 @@ private fun RetroPodScreen(
 ) {
     var songs by remember { mutableStateOf(emptyList<Song>()) }
     var query by remember { mutableStateOf("") }
+    var searchOpen by remember { mutableStateOf(false) }
     var tab by remember { mutableStateOf(0) }
     var showPlayer by remember { mutableStateOf(false) }
     var currentUri by remember { mutableStateOf<String?>(null) }
@@ -231,7 +232,7 @@ private fun RetroPodScreen(
 
     Box(
         Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Color(0xFF20283B), Night, Color(0xFF101923)))
+            Brush.verticalGradient(listOf(Color(0xFF080808), Color.Black, Color(0xFF050505)))
         )
     ) {
         Column(
@@ -243,10 +244,13 @@ private fun RetroPodScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("RETROPOD", color = Mint, fontSize = 17.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                    Text("YOUR MUSIC, REWOUND", color = Muted, fontSize = 9.sp, letterSpacing = 2.4.sp)
+                    Text("RetroPod", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold, letterSpacing = .2.sp)
+                    Text("YOUR MUSIC", color = Muted, fontSize = 9.sp, letterSpacing = 2.sp)
                 }
-                Icon(Icons.Default.GraphicEq, null, tint = Mint, modifier = Modifier.size(27.dp))
+                IconButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) query = "" }) {
+                    Icon(if (searchOpen) Icons.Default.Close else Icons.Default.Search, "Search", tint = White)
+                }
+
             }
 
             if (!hasPermission()) {
@@ -268,7 +272,7 @@ private fun RetroPodScreen(
                     onSeek = { controller?.seekTo(it) }
                 )
             } else {
-                OutlinedTextField(
+                if (searchOpen) OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -291,7 +295,7 @@ private fun RetroPodScreen(
                 )
                 Spacer(Modifier.height(14.dp))
                 TabRow(
-                    selectedTabIndex = tab,
+                    selectedTabIndex = tab.coerceIn(0, 1),
                     containerColor = Color.Transparent,
                     contentColor = Mint,
                     divider = {}
@@ -341,13 +345,7 @@ private fun RetroPodScreen(
                     onNext = { controller?.seekToNextMediaItem() }
                 )
             }
-            Text(
-                "MADE FOR THE LOVE OF MUSIC",
-                color = Muted.copy(alpha = .55f),
-                fontSize = 8.sp,
-                letterSpacing = 2.sp,
-                modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
-            )
+
         }
     }
 }
@@ -415,7 +413,8 @@ private fun SongRow(song: Song, index: Int, onClick: () -> Unit) {
         Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text((index + 1).toString().padStart(2, '0'), color = Muted, fontSize = 11.sp, modifier = Modifier.width(32.dp))
+        AlbumArtwork(song, Math.floorMod(song.album.hashCode(), 4), Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)))
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(song.title, color = White, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("${song.artist}  •  ${song.album}", color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -497,7 +496,7 @@ private fun FullPlayer(
             state = pager,
             contentPadding = PaddingValues(horizontal = 34.dp),
             pageSpacing = 14.dp,
-            modifier = Modifier.fillMaxWidth().height(300.dp)
+            modifier = Modifier.fillMaxWidth().height(260.dp)
         ) { page ->
             val song = songs.getOrNull(page)
             val artIndex = (song?.album?.hashCode()?.ushr(1) ?: page) % 4
@@ -530,10 +529,12 @@ private fun FullPlayer(
             Spacer(Modifier.width(24.dp))
             IconButton(
                 onClick = onPlayPause,
-                modifier = Modifier.size(74.dp).clip(CircleShape).background(Mint)
+                modifier = Modifier.size(78.dp).clip(CircleShape)
+                    .background(Color(0xFF171717))
+                    .then(Modifier)
             ) {
                 AnimatedContent(isPlaying, label = "playPauseIcon") { playing ->
-                    Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Night, modifier = Modifier.size(42.dp))
+                    Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = White, modifier = Modifier.size(42.dp))
                 }
             }
             Spacer(Modifier.width(24.dp))
@@ -542,7 +543,6 @@ private fun FullPlayer(
             }
         }
         Spacer(Modifier.weight(1f))
-        Text("SWIPE THROUGH YOUR MUSIC", color = Muted, fontSize = 9.sp, letterSpacing = 2.sp)
         Spacer(Modifier.height(12.dp))
     }
 }
