@@ -579,6 +579,10 @@ private fun HomeScreen(
                 QuickCard("Playlists", Icons.Default.QueueMusic, "Your mix", onOpenPlaylists, Modifier.weight(1f))
             }
         }
+        if (albums.isNotEmpty()) {
+            item { SectionHeader("Your albums", "Swipe to explore") }
+            item { HomeCoverFlow(albums = albums, onAlbum = { entry -> entry.second.firstOrNull()?.let(onPlay) }) }
+        }
         item { SectionHeader("Recently played", if (recent.isEmpty()) "Start listening" else "${recent.size} tracks") }
         if (recent.isEmpty()) {
             item {
@@ -598,6 +602,52 @@ private fun HomeScreen(
         }
         item { SectionHeader("Explore your music", "From your library") }
         items(songs.takeLast(8).reversed()) { song -> SongRow(song, onClick = { onPlay(song) }, onMore = {}) }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun HomeCoverFlow(
+    albums: List<Pair<String, List<Song>>>,
+    onAlbum: (Pair<String, List<Song>>) -> Unit
+) {
+    val pager = rememberPagerState(pageCount = { albums.size })
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        HorizontalPager(
+            state = pager,
+            contentPadding = PaddingValues(horizontal = 76.dp),
+            pageSpacing = 18.dp,
+            modifier = Modifier.fillMaxWidth().height(226.dp),
+            beyondViewportPageCount = 2
+        ) { page ->
+            val entry = albums[page]
+            val distance = (pager.currentPage - page) + pager.currentPageOffsetFraction
+            val scale = 1f - (kotlin.math.abs(distance).coerceIn(0f, 1f) * .19f)
+            Column(
+                Modifier.fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        rotationY = distance.coerceIn(-1f, 1f) * -27f
+                        cameraDistance = 18f * density
+                        alpha = 1f - kotlin.math.abs(distance).coerceIn(0f, 1f) * .22f
+                    }
+                    .clickable { onAlbum(entry) },
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    AlbumArtwork(entry.second.firstOrNull(), page, Modifier.fillMaxSize())
+                    Box(Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .18f)))
+                    ))
+                }
+                Spacer(Modifier.height(9.dp))
+                Text(entry.first, color = White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(entry.second.firstOrNull()?.artist ?: "Unknown artist", color = Muted,
+                    fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }
 
@@ -719,21 +769,34 @@ private fun AlbumsScreen(
             beyondViewportPageCount = 1
         ) { page ->
             val entry = albums[page]
+            val distance = (pager.currentPage - page) + pager.currentPageOffsetFraction
             val scale by animateFloatAsState(
-                if (!animationsEnabled || pager.currentPage == page) 1f else .84f,
+                if (!animationsEnabled) 1f else 1f - (kotlin.math.abs(distance).coerceIn(0f, 1f) * .17f),
                 animationSpec = tween(350, easing = FastOutSlowInEasing), label = "albumSwipeScale"
             )
             Column(
-                Modifier.fillMaxSize().scale(scale).clickable { onAlbum(entry) },
+                Modifier.fillMaxSize().scale(scale).graphicsLayer {
+                    rotationY = distance.coerceIn(-1f, 1f) * -24f
+                    cameraDistance = 20f * density
+                    alpha = 1f - kotlin.math.abs(distance).coerceIn(0f, 1f) * .18f
+                }.clickable { onAlbum(entry) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                AlbumArtwork(entry.second.firstOrNull(), page, Modifier.fillMaxWidth().aspectRatio(1f))
-                Spacer(Modifier.height(20.dp))
+                Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
+                    AlbumArtwork(entry.second.firstOrNull(), page, Modifier.fillMaxSize())
+                    Box(Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .16f)))
+                    ))
+                }
+                Spacer(Modifier.height(12.dp))
+                AlbumArtwork(entry.second.firstOrNull(), page, Modifier.fillMaxWidth().aspectRatio(1f)
+                    .graphicsLayer { scaleY = -1f; alpha = .10f })
+                Spacer(Modifier.height(7.dp))
                 Text(entry.first, color = White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${entry.second.firstOrNull()?.artist ?: "Unknown artist"} • ${entry.second.size} tracks", color = Muted, fontSize = 12.sp)
                 Spacer(Modifier.height(12.dp))
-                Text("TAP TO PLAY ALBUM", color = Accent, fontSize = 10.sp, letterSpacing = 1.5.sp)
+                Text("TAP TO PLAY ALBUM", color = Muted, fontSize = 9.sp, letterSpacing = 1.5.sp)
             }
         }
     }
