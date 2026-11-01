@@ -1,0 +1,22 @@
+Project root:
+  settings.gradle.kts
+  build.gradle.kts
+  gradle.properties
+  .gitignore
+  app/
+    build.gradle.kts
+    src/main/AndroidManifest.xml
+    src/main/java/com/retropod/player/
+      MainActivity.kt
+      Song.kt
+      PlaybackService.kt
+      RetroPodApplication.kt
+    src/main/res/drawable-nodpi/
+      cover_aurora.png
+      cover_sunset.png
+      cover_neon.png
+      cover_mono.png
+  .github/workflows/build-apk.yml
+  README.md
+
+The cloud build workflow provisions Gradle 8.9; no wrapper JAR is required.
