@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -71,19 +72,12 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 private val Night = Color(0xFF000000)
-<<<<<<< HEAD
-private val SurfaceNight = Color(0xFF151515)
-private val Mint = Color(0xFFE6E6E6)
-private val Muted = Color(0xFF929292)
-private val White = Color(0xFFF5F5F5)
-=======
 private val SurfaceNight = Color(0xFF101010)
 private val SurfaceRaised = Color(0xFF1A1A1A)
 private val Accent = Color(0xFFE8E8E8)
 private val AccentBlue = Color(0xFF777777)
 private val Muted = Color(0xFF9297A8)
 private val White = Color(0xFFF5F3FA)
->>>>>>> parent of 906647e... Last Sync: 2026-11-01 07:56 (Mobile)
 
 class MainActivity : ComponentActivity() {
     private var controller by mutableStateOf<MediaController?>(null)
@@ -147,15 +141,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-<<<<<<< HEAD
-        window.statusBarColor = android.graphics.Color.BLACK
-        window.navigationBarColor = android.graphics.Color.BLACK
-=======
         window.statusBarColor = android.graphics.Color.rgb(8, 9, 15)
         window.navigationBarColor = android.graphics.Color.rgb(8, 9, 15)
         window.decorView.systemUiVisibility = 0
         AppContextHolder.context = applicationContext
->>>>>>> parent of 906647e... Last Sync: 2026-11-01 07:56 (Mobile)
         setContent {
             RetroPodTheme {
                 RetroPodScreen(
@@ -196,13 +185,7 @@ private fun RetroPodScreen(
     val scope = rememberCoroutineScope()
     var permissionGranted by remember { mutableStateOf(hasPermission()) }
     var songs by remember { mutableStateOf(emptyList<Song>()) }
-<<<<<<< HEAD
-    var query by remember { mutableStateOf("") }
-    var searchOpen by remember { mutableStateOf(false) }
-    var tab by remember { mutableStateOf(0) }
-=======
     var tab by remember { mutableStateOf(LibraryTab.HOME) }
->>>>>>> parent of 906647e... Last Sync: 2026-11-01 07:56 (Mobile)
     var showPlayer by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
@@ -321,30 +304,6 @@ private fun RetroPodScreen(
         haptic()
     }
 
-<<<<<<< HEAD
-    Box(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(listOf(Color(0xFF080808), Color.Black, Color(0xFF050505)))
-        )
-    ) {
-        Column(
-            Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 17.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("RetroPod", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold, letterSpacing = .2.sp)
-                    Text("YOUR MUSIC", color = Muted, fontSize = 9.sp, letterSpacing = 2.sp)
-                }
-                IconButton(onClick = { searchOpen = !searchOpen; if (!searchOpen) query = "" }) {
-                    Icon(if (searchOpen) Icons.Default.Close else Icons.Default.Search, "Search", tint = White)
-                }
-
-            }
-=======
     fun addSongToPlaylist(song: Song, name: String) {
         val ids = (playlists[name] ?: emptyList()).toMutableList()
         if (song.id !in ids) ids.add(song.id)
@@ -353,7 +312,6 @@ private fun RetroPodScreen(
         Toast.makeText(context, "Added to $name", Toast.LENGTH_SHORT).show()
         haptic()
     }
->>>>>>> parent of 906647e... Last Sync: 2026-11-01 07:56 (Mobile)
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF000000), Night, Night)))) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -374,39 +332,9 @@ private fun RetroPodScreen(
                     animationsEnabled = animationsEnabled
                 )
             } else {
-<<<<<<< HEAD
-                if (searchOpen) OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    placeholder = { Text("Search songs, albums, artists", color = Muted) },
-                    leadingIcon = { Icon(Icons.Default.Search, null, tint = Muted) },
-                    trailingIcon = {
-                        if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Default.Close, null, tint = Muted)
-                        }
-                    },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Mint,
-                        unfocusedBorderColor = Muted.copy(alpha = .3f),
-                        focusedTextColor = White,
-                        unfocusedTextColor = White,
-                        cursorColor = Mint
-                    )
-                )
-                Spacer(Modifier.height(14.dp))
-                TabRow(
-                    selectedTabIndex = tab.coerceIn(0, 1),
-                    containerColor = Color.Transparent,
-                    contentColor = Mint,
-                    divider = {}
-=======
                 Row(
                     Modifier.fillMaxWidth().padding(start = 20.dp, end = 14.dp, top = 12.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
->>>>>>> parent of 906647e... Last Sync: 2026-11-01 07:56 (Mobile)
                 ) {
                     Box(Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(
                         Brush.linearGradient(listOf(Accent, AccentBlue))
@@ -509,9 +437,6 @@ private fun RetroPodScreen(
                     }
                 }
             }
-<<<<<<< HEAD
-
-=======
         }
 
         if (showSettings) {
@@ -592,7 +517,6 @@ private fun RetroPodScreen(
                 },
                 confirmButton = { TextButton(onClick = { showTrackDetails = null }) { Text("Done", color = Accent) } }
             )
->>>>>>> parent of 906647e... Last Sync: 2026-11-01 07:56 (Mobile)
         }
     }
 }
@@ -689,30 +613,55 @@ private fun SongsScreen(
                 }
             }
         }
-        Column(
-            Modifier.width(22.dp).fillMaxHeight(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            ("ABCDEFGHIJKLMNOPQRSTUVWXYZ#").forEach { char ->
-                val exists = letters.contains(char)
-                Text(
-                    char.toString(),
-                    color = if (exists) Accent else Muted.copy(alpha = .25f),
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable(enabled = exists) {
-                            var target = 0
-                            for (letter in letters) {
-                                if (letter == char) break
-                                target += 1 + (grouped[letter]?.size ?: 0)
-                            }
-                            scope.launch { listState.animateScrollToItem(target) }
-                        }
-                        .padding(vertical = 1.dp)
+        var activeLetter by remember { mutableStateOf<Char?>(null) }
+        val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#"
+        fun jumpToLetter(char: Char) {
+            if (!letters.contains(char)) return
+            var target = 0
+            for (letter in letters) {
+                if (letter == char) break
+                target += 1 + (grouped[letter]?.size ?: 0)
+            }
+            activeLetter = char
+            scope.launch { listState.animateScrollToItem(target) }
+        }
+        Box(
+            Modifier.width(34.dp).fillMaxHeight().pointerInput(letters) {
+                detectDragGestures(
+                    onDragStart = { point ->
+                        val index = (point.y / size.height * alphabet.length).toInt().coerceIn(0, alphabet.lastIndex)
+                        jumpToLetter(alphabet[index])
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        val index = (change.position.y / size.height * alphabet.length).toInt().coerceIn(0, alphabet.lastIndex)
+                        jumpToLetter(alphabet[index])
+                    },
+                    onDragEnd = { activeLetter = null },
+                    onDragCancel = { activeLetter = null }
                 )
+            }, contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                alphabet.forEach { char ->
+                    val exists = letters.contains(char)
+                    Text(char.toString(),
+                        color = if (activeLetter == char) Night else if (exists) Accent else Muted.copy(alpha = .25f),
+                        fontSize = if (activeLetter == char) 10.sp else 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clip(CircleShape)
+                            .background(if (activeLetter == char) Accent else Color.Transparent)
+                            .clickable(enabled = exists) { jumpToLetter(char) }
+                            .padding(horizontal = 3.dp, vertical = 1.dp))
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = activeLetter != null,
+                modifier = Modifier.align(Alignment.CenterStart).offset(x = (-54).dp)
+            ) {
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(SurfaceRaised), contentAlignment = Alignment.Center) {
+                    Text(activeLetter?.toString() ?: "", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -819,13 +768,8 @@ private fun SongRow(song: Song, onClick: () -> Unit, onMore: () -> Unit) {
             .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-<<<<<<< HEAD
-        AlbumArtwork(song, Math.floorMod(song.album.hashCode(), 4), Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)))
-        Spacer(Modifier.width(12.dp))
-=======
         AlbumArtwork(song, Math.floorMod(song.album.hashCode(), 4), Modifier.size(43.dp))
         Spacer(Modifier.width(11.dp))
->>>>>>> parent of 906647e... Last Sync: 2026-11-01 07:56 (Mobile)
         Column(Modifier.weight(1f)) {
             Text(song.title, color = White, fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("${song.artist}  •  ${song.album}", color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -883,15 +827,8 @@ private fun FullPlayer(
             if (songs.isNotEmpty() && pager.currentPage != currentIndex) controller?.seekTo(pager.currentPage, 0L)
         }
         HorizontalPager(
-<<<<<<< HEAD
-            state = pager,
-            contentPadding = PaddingValues(horizontal = 34.dp),
-            pageSpacing = 14.dp,
-            modifier = Modifier.fillMaxWidth().height(260.dp)
-=======
             state = pager, contentPadding = PaddingValues(horizontal = 38.dp),
             pageSpacing = 12.dp, modifier = Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 330.dp)
->>>>>>> parent of 906647e... Last Sync: 2026-11-01 07:56 (Mobile)
         ) { page ->
             val song = songs.getOrNull(page)
             val scale by animateFloatAsState(if (!animationsEnabled || page == pager.currentPage) 1f else .87f, tween(360), label = "playerCover")
@@ -969,17 +906,6 @@ private fun SettingsDialog(
                     Text("Make RetroPod yours", color = Muted, fontSize = 12.sp)
                 }
             }
-<<<<<<< HEAD
-            Spacer(Modifier.width(24.dp))
-            IconButton(
-                onClick = onPlayPause,
-                modifier = Modifier.size(78.dp).clip(CircleShape)
-                    .background(Color(0xFF171717))
-                    .then(Modifier)
-            ) {
-                AnimatedContent(isPlaying, label = "playPauseIcon") { playing ->
-                    Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = White, modifier = Modifier.size(42.dp))
-=======
             Spacer(Modifier.height(22.dp))
             Text("PLAYBACK & FEEL", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
             Spacer(Modifier.height(10.dp))
@@ -1000,7 +926,6 @@ private fun SettingsDialog(
                 Column(Modifier.weight(1f)) {
                     Text("Rescan music", color = White, fontWeight = FontWeight.Medium)
                     Text("Refresh songs and albums on this device", color = Muted, fontSize = 11.sp)
->>>>>>> parent of 906647e... Last Sync: 2026-11-01 07:56 (Mobile)
                 }
                 Icon(Icons.Default.ChevronRight, null, tint = Muted)
             }
@@ -1073,9 +998,6 @@ private fun EmptyPermission(onGrant: () -> Unit) {
         Button(onClick = onGrant, colors = ButtonDefaults.buttonColors(containerColor = Accent)) {
             Text("ALLOW MUSIC ACCESS", color = Night)
         }
-<<<<<<< HEAD
-        Spacer(Modifier.weight(1f))
-=======
     }
 }
 
@@ -1086,7 +1008,6 @@ private fun EmptyLibraryMessage(title: String = "Your library is quiet", detail:
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(Icons.Default.MusicOff, null, tint = Accent, modifier = Modifier.size(43.dp))
->>>>>>> parent of 906647e... Last Sync: 2026-11-01 07:56 (Mobile)
         Spacer(Modifier.height(12.dp))
         Text(title, color = White, fontWeight = FontWeight.Bold)
         Text(detail, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(10.dp))
