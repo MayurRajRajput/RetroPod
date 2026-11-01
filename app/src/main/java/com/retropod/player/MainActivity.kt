@@ -27,6 +27,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -46,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -76,8 +78,8 @@ private val SurfaceNight = Color(0xFF101010)
 private val SurfaceRaised = Color(0xFF1A1A1A)
 private val Accent = Color(0xFFE8E8E8)
 private val AccentBlue = Color(0xFF777777)
-private val Muted = Color(0xFF9297A8)
-private val White = Color(0xFFF5F3FA)
+private val Muted = Color(0xFF858585)
+private val White = Color(0xFFF2F2F2)
 
 class MainActivity : ComponentActivity() {
     private var controller by mutableStateOf<MediaController?>(null)
@@ -196,6 +198,7 @@ private fun RetroPodScreen(
     var menuSong by remember { mutableStateOf<Song?>(null) }
     var showSongMenu by remember { mutableStateOf(false) }
     var showTrackDetails by remember { mutableStateOf<Song?>(null) }
+    var showQueue by remember { mutableStateOf(false) }
     var hapticsEnabled by remember { mutableStateOf(context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).getBoolean("haptics", true)) }
     var animationsEnabled by remember { mutableStateOf(context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).getBoolean("animations", true)) }
     var volume by remember { mutableFloatStateOf(1f) }
@@ -329,6 +332,7 @@ private fun RetroPodScreen(
                     onPrevious = { controller?.seekToPreviousMediaItem(); haptic() },
                     onNext = { controller?.seekToNextMediaItem(); haptic() },
                     onSeek = { controller?.seekTo(it) },
+                    onQueue = { showQueue = true },
                     animationsEnabled = animationsEnabled
                 )
             } else {
@@ -439,6 +443,35 @@ private fun RetroPodScreen(
             }
         }
 
+        if (showQueue) {
+            AlertDialog(
+                onDismissRequest = { showQueue = false },
+                containerColor = SurfaceNight,
+                title = { Text("Up next", color = White) },
+                text = {
+                    if (queueSongs.isEmpty()) Text("Your queue is empty.", color = Muted)
+                    else LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                        itemsIndexed(queueSongs) { index, song ->
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                                    .background(if (index == currentIndex) SurfaceRaised else Color.Transparent)
+                                    .clickable { controller?.seekTo(index, 0L); showQueue = false }
+                                    .padding(horizontal = 9.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(if (index == currentIndex) "♫" else "${index + 1}", color = Accent, modifier = Modifier.width(28.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(song.title, color = White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(song.artist, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                if (index == currentIndex) Text("PLAYING", color = Accent, fontSize = 9.sp)
+                            }
+                        }
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showQueue = false }) { Text("Done", color = Accent) } }
+            )
+        }
         if (showSettings) {
             SettingsDialog(
                 haptics = hapticsEnabled, onHaptics = {
@@ -703,7 +736,6 @@ private fun AlbumsScreen(
                 Text("TAP TO PLAY ALBUM", color = Accent, fontSize = 10.sp, letterSpacing = 1.5.sp)
             }
         }
-        Text("${pager.currentPage + 1} / ${albums.size}", color = Muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally).padding(14.dp))
     }
 }
 
@@ -761,11 +793,13 @@ private fun PlaylistsScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SongRow(song: Song, onClick: () -> Unit, onMore: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 10.dp),
+            .combinedClickable(onClick = onClick, onLongClick = onMore)
+            .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AlbumArtwork(song, Math.floorMod(song.album.hashCode(), 4), Modifier.size(43.dp))
@@ -775,9 +809,6 @@ private fun SongRow(song: Song, onClick: () -> Unit, onMore: () -> Unit) {
             Text("${song.artist}  •  ${song.album}", color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Text(formatTime(song.durationMs), color = Muted, fontSize = 10.sp)
-        Box {
-            IconButton(onClick = onMore) { Icon(Icons.Default.MoreVert, "More actions", tint = Muted) }
-        }
     }
 }
 
@@ -809,12 +840,13 @@ private fun FullPlayer(
     volume: Float, onVolume: (Float) -> Unit, shuffle: Boolean, repeat: Boolean,
     onShuffle: () -> Unit, onRepeat: () -> Unit, onBack: () -> Unit,
     onPlayPause: () -> Unit, onPrevious: () -> Unit, onNext: () -> Unit,
-    onSeek: (Long) -> Unit, animationsEnabled: Boolean
+    onSeek: (Long) -> Unit, onQueue: () -> Unit, animationsEnabled: Boolean
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, "Close player", tint = White) }
             Text("NOW PLAYING", color = Muted, fontSize = 10.sp, letterSpacing = 3.sp, modifier = Modifier.weight(1f))
+            IconButton(onClick = onQueue) { Icon(Icons.Default.QueueMusic, "Show queue", tint = White) }
             IconButton(onClick = onRepeat) { Icon(Icons.Default.Repeat, "Repeat", tint = if (repeat) Accent else Muted) }
         }
         Spacer(Modifier.height(8.dp))
@@ -831,8 +863,13 @@ private fun FullPlayer(
             pageSpacing = 12.dp, modifier = Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 330.dp)
         ) { page ->
             val song = songs.getOrNull(page)
-            val scale by animateFloatAsState(if (!animationsEnabled || page == pager.currentPage) 1f else .87f, tween(360), label = "playerCover")
-            AlbumArtwork(song, page, Modifier.fillMaxWidth().aspectRatio(1f).scale(scale))
+            val distance = (page - pager.currentPage).toFloat()
+            val scale by animateFloatAsState(if (!animationsEnabled) 1f else if (page == pager.currentPage) 1f else .86f, tween(360), label = "playerCover")
+            AlbumArtwork(song, page, Modifier.fillMaxWidth().aspectRatio(1f).scale(scale).graphicsLayer {
+                rotationY = if (animationsEnabled) distance.coerceIn(-1f, 1f) * -24f else 0f
+                cameraDistance = 18f * density
+                translationX = distance * 7.dp.toPx()
+            })
         }
         Spacer(Modifier.height(18.dp))
         Text(currentTitle, color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
