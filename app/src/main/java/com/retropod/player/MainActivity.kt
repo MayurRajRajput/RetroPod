@@ -1,6 +1,7 @@
 package com.retropod.player
 
 import android.Manifest
+import android.app.Activity
 import android.content.ComponentName
 import android.content.ContentUris
 import android.content.Context
@@ -16,6 +17,7 @@ import android.provider.MediaStore
 import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -225,6 +227,27 @@ private fun RetroPodScreen(
     var queueSongs by remember { mutableStateOf(emptyList<Song>()) }
     var currentIndex by remember { mutableIntStateOf(0) }
     var recentIds by remember { mutableStateOf(emptyList<Long>()) }
+    var lastBackPressedAt by remember { mutableLongStateOf(0L) }
+    BackHandler(enabled = true) {
+        when {
+            showPlayer -> showPlayer = false
+            showSettings -> showSettings = false
+            showQueue -> showQueue = false
+            showSleepTimerDialog -> showSleepTimerDialog = false
+            showSongMenu -> showSongMenu = false
+            searchOpen -> { searchOpen = false; query = "" }
+            tab != LibraryTab.HOME -> tab = LibraryTab.HOME
+            else -> {
+                val now = System.currentTimeMillis()
+                if (now - lastBackPressedAt < 2000L) {
+                    (context as? Activity)?.finish()
+                } else {
+                    lastBackPressedAt = now
+                    Toast.makeText(context, "Press Back again to exit RetroPod", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
     val playlists: SnapshotStateMap<String, MutableList<Long>> = remember { mutableStateMapOf() }
 
     val lyricsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -809,48 +832,108 @@ private fun HomeScreen(
     onPlay: (Song) -> Unit, onOpenSongs: () -> Unit, onOpenAlbums: () -> Unit,
     onOpenPlaylists: () -> Unit
 ) {
-    val recent = recentIds.mapNotNull { id -> songs.find { it.id == id } }.distinctBy { it.id }.take(6)
+    val recent = recentIds.mapNotNull { id -> songs.find { it.id == id } }
+        .distinctBy { it.id }.take(8)
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 14.dp),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 18.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("Your library", color = White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                Text("${songs.size} songs  •  ${albums.size} albums", color = Muted, fontSize = 13.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Good evening", color = White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                Text("Your music, your moment.", color = Muted, fontSize = 13.sp)
             }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                QuickCard("Songs", Icons.Default.MusicNote, songs.size.toString(), onOpenSongs, Modifier.weight(1f))
-                QuickCard("Albums", Icons.Default.Album, albums.size.toString(), onOpenAlbums, Modifier.weight(1f))
-                QuickCard("Playlists", Icons.Default.QueueMusic, "Your mix", onOpenPlaylists, Modifier.weight(1f))
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HomeStatCard("Songs", songs.size.toString(), Icons.Default.MusicNote,
+                        Modifier.weight(1f), onOpenSongs)
+                    HomeStatCard("Albums", albums.size.toString(), Icons.Default.Album,
+                        Modifier.weight(1f), onOpenAlbums)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HomeStatCard("Playlists", "Your collections", Icons.Default.QueueMusic,
+                        Modifier.weight(1f), onOpenPlaylists)
+                    HomeStatCard("Recently played", "${recent.size} tracks", Icons.Default.History,
+                        Modifier.weight(1f), { recent.firstOrNull()?.let(onPlay) })
+                }
             }
         }
-        if (albums.isNotEmpty()) {
-            item { SectionHeader("Your albums", "Swipe to explore") }
-            item { HomeCoverFlow(albums = albums, onAlbum = { entry -> entry.second.firstOrNull()?.let(onPlay) }) }
-        }
-        item { SectionHeader("Recently played", if (recent.isEmpty()) "Start listening" else "${recent.size} tracks") }
-        if (recent.isEmpty()) {
+        if (recent.isNotEmpty()) {
             item {
-                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFF292929), SurfaceNight)))
-                    .padding(22.dp)) {
-                    Column {
-                        Icon(Icons.Default.GraphicEq, null, tint = Accent, modifier = Modifier.size(30.dp))
-                        Spacer(Modifier.height(8.dp))
-                        Text("Your next favorite song is waiting.", color = White, fontWeight = FontWeight.SemiBold)
-                        Text("Play something from Songs or Albums to get started.", color = Muted, fontSize = 12.sp)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Recently played", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("YOUR HISTORY", color = Muted, fontSize = 9.sp, letterSpacing = 1.2.sp)
+                }
+            }
+            item {
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(end = 4.dp)
+                ) {
+                    items(recent, key = { it.id }) { song ->
+                        Column(
+                            Modifier.width(112.dp).clickable { onPlay(song) },
+                            verticalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
+                            AlbumArtwork(song, song.id.hashCode(), Modifier.fillMaxWidth().aspectRatio(1f))
+                            Text(song.title, color = White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(song.artist, color = Muted, fontSize = 10.sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }
-        } else {
-            items(recent) { song -> SongRow(song, onClick = { onPlay(song) }, onMore = {}) }
         }
-        item { SectionHeader("Explore your music", "From your library") }
-        items(songs.takeLast(8).reversed()) { song -> SongRow(song, onClick = { onPlay(song) }, onMore = {}) }
+        if (albums.isNotEmpty()) {
+            item {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Your albums", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("SWIPE TO EXPLORE", color = Muted, fontSize = 9.sp, letterSpacing = 1.1.sp)
+                }
+            }
+            item {
+                HomeCoverFlow(albums = albums, onAlbum = { entry ->
+                    entry.second.firstOrNull()?.let(onPlay)
+                })
+            }
+        }
+        if (songs.isEmpty()) {
+            item {
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
+                        .background(SurfaceNight).padding(22.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.GraphicEq, null, tint = Accent, modifier = Modifier.size(30.dp))
+                        Text("Your library is waiting.", color = White, fontWeight = FontWeight.SemiBold)
+                        Text("Add music to your device and rescan your library.", color = Muted, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeStatCard(
+    title: String, detail: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier, onClick: () -> Unit
+) {
+    Column(
+        modifier.clip(RoundedCornerShape(22.dp)).background(SurfaceNight)
+            .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 15.dp)
+            .heightIn(min = 88.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Icon(icon, contentDescription = null, tint = White, modifier = Modifier.size(22.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, color = White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(detail, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -864,9 +947,9 @@ private fun HomeCoverFlow(
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         HorizontalPager(
             state = pager,
-            contentPadding = PaddingValues(horizontal = 76.dp),
+            contentPadding = PaddingValues(horizontal = 68.dp),
             pageSpacing = 18.dp,
-            modifier = Modifier.fillMaxWidth().height(226.dp),
+            modifier = Modifier.fillMaxWidth().height(252.dp),
             beyondViewportPageCount = 2
         ) { page ->
             val entry = albums[page]
@@ -1074,9 +1157,9 @@ private fun PlaylistsScreen(
     onRemoveSong: (String, Song) -> Unit, onMore: (Song) -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Your playlists", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("Playlists", color = White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                 Text("${playlists.size} collections", color = Muted, fontSize = 12.sp)
             }
             FilledIconButton(onClick = onCreate, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Accent)) {
@@ -1084,45 +1167,88 @@ private fun PlaylistsScreen(
             }
         }
         if (playlists.isEmpty()) {
-            EmptyLibraryMessage(title = "No playlists yet", detail = "Tap + to create your first playlist.")
+            EmptyLibraryMessage(title = "No playlists yet", detail = "Tap + to create your first collection.")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
-                playlistOrder.filter { it in playlists }.forEach { name ->
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(13.dp),
+                contentPadding = PaddingValues(bottom = 18.dp)
+            ) {
+                playlistOrder.filter { it in playlists }.forEachIndexed { index, name ->
                     val tracks = playlists[name].orEmpty().mapNotNull { id -> songs.find { it.id == id } }
                     item(key = name) {
-                        Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(SurfaceNight)
-                                .clickable { onPlay(name) }.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                                .background(SurfaceNight).animateContentSize()
                         ) {
-                            Box(Modifier.size(48.dp).clip(RoundedCornerShape(13.dp)).background(Accent.copy(alpha = .18f)), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.QueueMusic, null, tint = Accent)
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(name, color = White, fontWeight = FontWeight.SemiBold)
-                                Text("${tracks.size} songs", color = Muted, fontSize = 11.sp)
-                            }
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Row {
-                                    IconButton(onClick = { onMove(name, -1) }) { Icon(Icons.Default.KeyboardArrowUp, "Move playlist up", tint = Muted) }
-                                    IconButton(onClick = { onMove(name, 1) }) { Icon(Icons.Default.KeyboardArrowDown, "Move playlist down", tint = Muted) }
+                            Row(
+                                Modifier.fillMaxWidth().clickable { onPlay(name) }.padding(13.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    Modifier.size(76.dp).clip(RoundedCornerShape(15.dp))
+                                        .background(SurfaceRaised)
+                                ) {
+                                    if (tracks.isNotEmpty()) {
+                                        AlbumArtwork(tracks.first(), index, Modifier.fillMaxSize())
+                                        if (tracks.size > 1) {
+                                            Box(Modifier.align(Alignment.BottomEnd).padding(5.dp)
+                                                .clip(CircleShape).background(Color.Black.copy(alpha = .75f))
+                                                .padding(horizontal = 7.dp, vertical = 3.dp)) {
+                                                Text("+${tracks.size - 1}", color = White, fontSize = 9.sp)
+                                            }
+                                        }
+                                    } else {
+                                        Icon(Icons.Default.QueueMusic, null, tint = Accent,
+                                            modifier = Modifier.align(Alignment.Center).size(28.dp))
+                                    }
                                 }
-                                Row {
-                                    IconButton(onClick = { onRename(name) }) { Icon(Icons.Default.Edit, "Rename playlist", tint = Muted) }
-                                    IconButton(onClick = { onDelete(name) }) { Icon(Icons.Default.DeleteOutline, "Delete playlist", tint = Muted) }
+                                Spacer(Modifier.width(13.dp))
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(name, color = White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text("${tracks.size} songs", color = Muted, fontSize = 11.sp)
+                                    Text("PLAYLIST ${index + 1}", color = Muted, fontSize = 8.sp, letterSpacing = 1.2.sp)
+                                }
+                                FilledIconButton(
+                                    onClick = { onPlay(name) },
+                                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = Color(0xFF292929)),
+                                    modifier = Modifier.size(40.dp)
+                                ) { Icon(Icons.Default.PlayArrow, "Play playlist", tint = White) }
+                            }
+                            Row(
+                                Modifier.fillMaxWidth().padding(start = 9.dp, end = 9.dp, bottom = 5.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = { onMove(name, -1) }) {
+                                    Icon(Icons.Default.KeyboardArrowUp, "Move playlist up", tint = Muted)
+                                }
+                                IconButton(onClick = { onMove(name, 1) }) {
+                                    Icon(Icons.Default.KeyboardArrowDown, "Move playlist down", tint = Muted)
+                                }
+                                IconButton(onClick = { onRename(name) }) {
+                                    Icon(Icons.Default.Edit, "Rename playlist", tint = Muted)
+                                }
+                                IconButton(onClick = { onDelete(name) }) {
+                                    Icon(Icons.Default.DeleteOutline, "Delete playlist", tint = Muted)
                                 }
                             }
-                        }
-                    }
-                    items(tracks, key = { "${name}_${it.id}" }) { song ->
-                        Row(Modifier.fillMaxWidth().padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(song.title, color = White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(song.artist, color = Muted, fontSize = 10.sp)
+                            tracks.take(3).forEach { song ->
+                                Row(
+                                    Modifier.fillMaxWidth().clickable { onPlay(name) }
+                                        .padding(start = 16.dp, end = 10.dp, bottom = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(song.title, color = White.copy(alpha = .88f), fontSize = 11.sp,
+                                        modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    IconButton(onClick = { onMore(song) }, modifier = Modifier.size(30.dp)) {
+                                        Icon(Icons.Default.MoreHoriz, "Track actions", tint = Muted, modifier = Modifier.size(17.dp))
+                                    }
+                                    IconButton(onClick = { onRemoveSong(name, song) }, modifier = Modifier.size(30.dp)) {
+                                        Icon(Icons.Default.RemoveCircleOutline, "Remove from playlist", tint = Muted, modifier = Modifier.size(17.dp))
+                                    }
+                                }
                             }
-                            IconButton(onClick = { onMore(song) }) { Icon(Icons.Default.MoreVert, "Track actions", tint = Muted) }
-                            IconButton(onClick = { onRemoveSong(name, song) }) { Icon(Icons.Default.RemoveCircleOutline, "Remove from playlist", tint = Muted) }
                         }
                     }
                 }

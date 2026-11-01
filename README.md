@@ -47,3 +47,8 @@ This archive consolidates the staged project source, updates the app version to 
 ## Consolidated final source package — 2.5.0
 
 Adds a service-owned sleep timer and per-track local LRC/plain-text lyric import with playback-synchronized LRC display. Lyrics preferences are included in JSON backup/restore. See `FINAL-IMPLEMENTATION-STATUS.md` for exact scope and verification limitations. This archive is not a build-verified APK.
+
+
+## UI refresh 2.6.0
+
+The Home dashboard, playlist cards, album Cover Flow viewport, and Android Back behavior were refreshed to move the real Compose UI closer to the supplied RetroPod concept. See `UI-REDESIGN-2.6.0.md` for the exact scope and remaining gaps.

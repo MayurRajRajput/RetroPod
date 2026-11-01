@@ -10,8 +10,8 @@ android {
         applicationId = "com.retropod.player"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "2.5.0-final-source"
+        versionCode = 9
+        versionName = "2.6.0-ui-refresh"
     }
     buildFeatures { compose = true }
     compileOptions {
