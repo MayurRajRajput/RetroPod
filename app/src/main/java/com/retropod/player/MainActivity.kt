@@ -70,11 +70,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-private val Night = Color(0xFF08090F)
-private val SurfaceNight = Color(0xFF151722)
-private val SurfaceRaised = Color(0xFF202333)
-private val Accent = Color(0xFFB96CFF)
-private val AccentBlue = Color(0xFF766BFF)
+private val Night = Color(0xFF000000)
+private val SurfaceNight = Color(0xFF101010)
+private val SurfaceRaised = Color(0xFF1A1A1A)
+private val Accent = Color(0xFFE8E8E8)
+private val AccentBlue = Color(0xFF777777)
 private val Muted = Color(0xFF9297A8)
 private val White = Color(0xFFF5F3FA)
 
@@ -312,7 +312,7 @@ private fun RetroPodScreen(
         haptic()
     }
 
-    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF171126), Night, Night)))) {
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF000000), Night, Night)))) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             if (showPlayer) {
                 FullPlayer(
@@ -408,7 +408,7 @@ private fun RetroPodScreen(
                         onNext = { controller?.seekToNextMediaItem(); haptic() }
                     )
                     NavigationBar(
-                        containerColor = Color(0xFF0D0E16),
+                        containerColor = Color(0xFF080808),
                         contentColor = Accent,
                         tonalElevation = 0.dp,
                         modifier = Modifier.navigationBarsPadding()
@@ -549,7 +549,7 @@ private fun HomeScreen(
         if (recent.isEmpty()) {
             item {
                 Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
-                    .background(Brush.linearGradient(listOf(Color(0xFF30204C), SurfaceNight)))
+                    .background(Brush.linearGradient(listOf(Color(0xFF292929), SurfaceNight)))
                     .padding(22.dp)) {
                     Column {
                         Icon(Icons.Default.GraphicEq, null, tint = Accent, modifier = Modifier.size(30.dp))
@@ -690,7 +690,7 @@ private fun PlaylistsScreen(
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Your playlists", color = White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text("Your playlists", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold)
                 Text("${playlists.size} collections", color = Muted, fontSize = 12.sp)
             }
             FilledIconButton(onClick = onCreate, colors = IconButtonDefaults.filledIconButtonColors(containerColor = Accent)) {
@@ -862,27 +862,56 @@ private fun SettingsDialog(
     animations: Boolean, onAnimations: (Boolean) -> Unit,
     onRescan: () -> Unit, onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss, containerColor = SurfaceNight,
-        title = { Text("Settings", color = White, fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                SettingSwitch("Haptic feedback", "Vibration on taps and gestures", haptics, onHaptics)
-                SettingSwitch("Smooth animations", "Album and player transitions", animations, onAnimations)
-                Row(Modifier.fillMaxWidth().clickable(onClick = onRescan), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Refresh, null, tint = Accent)
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Rescan music", color = White)
-                        Text("Refresh songs and albums on this device", color = Muted, fontSize = 11.sp)
-                    }
-                    Icon(Icons.Default.ChevronRight, null, tint = Muted)
+    // Dedicated full-screen settings destination; intentionally not an AlertDialog.
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Night
+    ) {
+        Column(
+            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+                .padding(horizontal = 22.dp, vertical = 12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = White)
                 }
-                Text("RetroPod 2.0 • Local music player", color = Muted, fontSize = 10.sp)
+                Column(Modifier.weight(1f)) {
+                    Text("Settings", color = White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                    Text("Make RetroPod yours", color = Muted, fontSize = 12.sp)
+                }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done", color = Accent) } }
-    )
+            Spacer(Modifier.height(22.dp))
+            Text("PLAYBACK & FEEL", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+            Spacer(Modifier.height(10.dp))
+            SettingSwitch("Haptic feedback", "Subtle tactile response on controls and gestures", haptics, onHaptics)
+            Divider(color = Color.White.copy(alpha = .08f))
+            SettingSwitch("Smooth animations", "Cover flow and screen transitions", animations, onAnimations)
+            Spacer(Modifier.height(24.dp))
+            Text("MUSIC LIBRARY", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .clickable(onClick = onRescan)
+                    .background(SurfaceNight).padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Refresh, null, tint = Accent)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Rescan music", color = White, fontWeight = FontWeight.Medium)
+                    Text("Refresh songs and albums on this device", color = Muted, fontSize = 11.sp)
+                }
+                Icon(Icons.Default.ChevronRight, null, tint = Muted)
+            }
+            Spacer(Modifier.height(24.dp))
+            Text("ABOUT", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+            Spacer(Modifier.height(10.dp))
+            Text("RetroPod 2.0", color = White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text("A local music player, made for the love of music.", color = Muted, fontSize = 12.sp)
+            Spacer(Modifier.weight(1f))
+            Text("PURE BLACK • LOCAL MUSIC • NO DISTRACTIONS", color = Muted, fontSize = 9.sp, letterSpacing = 1.sp)
+        }
+    }
 }
 
 @Composable
