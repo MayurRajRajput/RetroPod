@@ -1,54 +1,30 @@
-# RetroPod 2.4.3 — Stage 1: Foundation
+# RetroPod — complete Android music player project
 
-Built from the latest supplied `RetroPod-main (4).zip`.
+RetroPod is an iPod-inspired local music player starter for Android. It includes:
+- Album library grouped from music on the device
+- Song list and search across song, artist and album names
+- Embedded album artwork extraction from audio files
+- Four original fallback album-art images included in the project
+- Animated player transitions and playback controls
+- Previous / play-pause / next and seek controls
+- AndroidX Media3 ExoPlayer + MediaSessionService for background playback and system media controls
+- GitHub Actions cloud build workflow
 
-## Stage 1 completed
-- Preserved the Android/Kotlin/Jetpack Compose project and package identity (`com.retropod.player`).
-- Preserved the existing Media3 playback service and Home, Songs, Albums, Playlists, and Settings entry points.
-- Established a pure-black AMOLED system-bar and window background foundation.
-- Changed the Android system accent from purple to monochrome silver while retaining the existing resource name for compatibility.
-- Updated app version metadata to `2.4.3-stage1` and aligned the CI artifact name.
+## Build the APK from a phone using GitHub
+1. Extract this ZIP.
+2. Upload the **contents** of the `RetroPod-Everything` folder to the root of your GitHub repository. Do not upload the ZIP itself.
+3. Keep the `.github` folder; it contains the APK build workflow.
+4. Open the repository's Actions tab.
+5. Choose **Build RetroPod APK** and tap **Run workflow** (or push to `main` to trigger it).
+6. When the run succeeds, download the `RetroPod-debug-apk` artifact.
+7. Extract the artifact ZIP and install `app-debug.apk`.
 
-## Existing functionality retained
-Local MediaStore scanning, Media3 playback, album grouping/artwork, Home/library navigation, playlist persistence, A–Z song navigation, mini/full player screens, and existing settings/player controls remain in the source. These are preserved, not claimed as newly completed.
+## Gradle setup
+The GitHub Actions workflow installs Gradle 8.9 using `gradle/actions/setup-gradle`, then runs `gradle :app:assembleDebug`. This project therefore does not require `gradlew` or `gradle/wrapper/gradle-wrapper.jar` for the cloud build. The root and app Gradle configuration files are included.
 
-## Not included in Stage 1
-This is a foundation stage, not the finished app. Later stages will implement the complete Cover Flow, redesigned player, library interactions, playlist/queue management, audio features, robust background restoration, and complete settings/backup. Existing partial controls do not prove their full features are complete.
-
-## Build and verification
-Targets Android SDK 35, minimum SDK 26, and Java 17. ZIP integrity and XML resources are checked. A Gradle/Kotlin build and physical-device test have **not** been run here because Android SDK/Gradle are unavailable. Open the project root in Android Studio, sync Gradle, then run `:app:assembleDebug` to verify locally.
-
-
-## Step 3 — Music player
-See `STAGE-3-PLAYER.md` for changes and verification limitations. This remains a staged source archive, not a device-tested release.
-
-
-## Step 4 — Music library
-See `STAGE-4-LIBRARY.md` for the library/search updates and verification status.
-
-
-## Step 5 — Playlist and queue management
-See `STAGE-5-PLAYLIST-QUEUE.md` for the new playlist editing and queue controls, plus verification limitations.
-
-
-## Step 6 — Audio features
-See `STAGE-6-AUDIO.md` for implemented equalizer integration and outstanding audio tasks.
-
-
-## Step 7 — Background playback and restoration
-See `STAGE-7-BACKGROUND-PLAYBACK.md` for MediaSession service persistence, paused restoration, and testing limitations.
-\n\n## Step 8 — Settings and personalization\nSee `STAGE-8-SETTINGS.md` for click-sound preferences and JSON settings/library backup and restore, with verification limitations.\n
-
-## Step 9 — Final integration and quality review
-
-This archive consolidates the staged project source, updates the app version to `2.4.8-stage9`, and aligns the GitHub Actions artifact name. See `STAGE-9-FINAL-QA.md` for the static checks performed, build instructions, device QA checklist, and outstanding verification. This is not a build-verified release APK.
-
-
-## Consolidated final source package — 2.5.0
-
-Adds a service-owned sleep timer and per-track local LRC/plain-text lyric import with playback-synchronized LRC display. Lyrics preferences are included in JSON backup/restore. See `FINAL-IMPLEMENTATION-STATUS.md` for exact scope and verification limitations. This archive is not a build-verified APK.
-
-
-## UI refresh 2.6.0
-
-The Home dashboard, playlist cards, album Cover Flow viewport, and Android Back behavior were refreshed to move the real Compose UI closer to the supplied RetroPod concept. See `UI-REDESIGN-2.6.0.md` for the exact scope and remaining gaps.
+## Notes
+- Requires Java 17 and Android SDK platform 35 in the GitHub runner; GitHub's hosted Ubuntu runner provides the Android SDK.
+- The app requests audio library permission when first opened.
+- Background playback uses an Android media session. System notification/lock-screen behavior depends on Android's media controls and notification settings.
+- This is a complete starter project, but it has not been compiled on a real Android device in this environment. Run the GitHub Actions build and share any error log if it fails; compatibility issues may need a small correction.
+- A debug APK is for direct testing. A Play Store release requires a signed release build.

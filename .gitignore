@@ -1,11 +1,6 @@
-*.iml
 .gradle/
 .idea/
 local.properties
-.DS_Store
-/build/
 **/build/
-.externalNativeBuild/
-.cxx/
-*.jks
-*.keystore
+.DS_Store
+*.iml
