@@ -17,3 +17,7 @@ This is a foundation stage, not the finished app. Later stages will implement th
 
 ## Build and verification
 Targets Android SDK 35, minimum SDK 26, and Java 17. ZIP integrity and XML resources are checked. A Gradle/Kotlin build and physical-device test have **not** been run here because Android SDK/Gradle are unavailable. Open the project root in Android Studio, sync Gradle, then run `:app:assembleDebug` to verify locally.
+
+
+## Step 3 — Music player
+See `STAGE-3-PLAYER.md` for changes and verification limitations. This remains a staged source archive, not a device-tested release.

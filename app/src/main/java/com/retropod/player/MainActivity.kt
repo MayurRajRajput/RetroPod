@@ -24,6 +24,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -47,12 +48,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -897,6 +901,56 @@ private fun MiniPlayer(title: String, artist: String, playing: Boolean, onOpen: 
 }
 
 @Composable
+private fun PlaybackWaveform(
+    progress: Float,
+    enabled: Boolean,
+    onSeekFraction: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Canvas(
+        modifier = modifier
+            .pointerInput(enabled) {
+                detectTapGestures { tap ->
+                    if (enabled && size.width > 0) onSeekFraction(tap.x / size.width)
+                }
+            }
+            .pointerInput(enabled) {
+                detectDragGestures(
+                    onDragStart = { point ->
+                        if (enabled && size.width > 0) onSeekFraction(point.x / size.width)
+                    },
+                    onDrag = { change, _ ->
+                        if (enabled && size.width > 0) {
+                            onSeekFraction(change.position.x / size.width)
+                            change.consume()
+                        }
+                    }
+                )
+            }
+    ) {
+        val count = 60
+        val gap = 3.dp.toPx()
+        val barWidth = ((size.width - gap * (count - 1)) / count).coerceAtLeast(1f)
+        val centerY = size.height / 2f
+        val playedUntil = progress.coerceIn(0f, 1f) * size.width
+        for (i in 0 until count) {
+            val waveHeight = 0.20f + 0.80f * kotlin.math.abs(kotlin.math.sin(i * 0.43f)) *
+                (0.58f + 0.42f * kotlin.math.abs(kotlin.math.sin(i * 0.17f + 1.2f)))
+            val barHeight = (size.height * 0.12f + size.height * 0.76f * waveHeight).coerceAtMost(size.height)
+            val x = i * (barWidth + gap)
+            val barColor = if (x + barWidth / 2f <= playedUntil) Accent else Muted.copy(alpha = 0.42f)
+            drawLine(barColor, Offset(x + barWidth / 2f, centerY - barHeight / 2f),
+                Offset(x + barWidth / 2f, centerY + barHeight / 2f), barWidth.coerceAtLeast(1.5f))
+        }
+        if (enabled) {
+            val cursorX = playedUntil.coerceIn(0f, size.width)
+            drawLine(White.copy(alpha = 0.9f), Offset(cursorX, size.height * 0.12f),
+                Offset(cursorX, size.height * 0.88f), 2.dp.toPx())
+        }
+    }
+}
+
+@Composable
 private fun FullPlayer(
     songs: List<Song>, currentIndex: Int, controller: MediaController?, isPlaying: Boolean,
     position: Long, duration: Long, currentTitle: String, currentArtist: String,
@@ -944,10 +998,11 @@ private fun FullPlayer(
             animationSpec = tween(240, easing = FastOutSlowInEasing),
             label = "playbackProgress"
         )
-        Slider(
-            value = animatedProgress,
-            onValueChange = { if (duration > 0) onSeek((it * duration).toLong()) },
-            colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent, inactiveTrackColor = Muted.copy(alpha = .3f))
+        PlaybackWaveform(
+            progress = animatedProgress,
+            enabled = duration > 0,
+            onSeekFraction = { fraction -> onSeek((fraction.coerceIn(0f, 1f) * duration).toLong()) },
+            modifier = Modifier.fillMaxWidth().height(48.dp)
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatTime(position), color = Muted, fontSize = 10.sp)
@@ -958,7 +1013,8 @@ private fun FullPlayer(
             IconButton(onClick = onShuffle) { Icon(Icons.Default.Shuffle, "Shuffle", tint = if (shuffle) Accent else Muted) }
             IconButton(onClick = onPrevious) { Icon(Icons.Default.SkipPrevious, "Previous", tint = White, modifier = Modifier.size(31.dp)) }
             FilledIconButton(
-                onClick = onPlayPause, modifier = Modifier.size(68.dp),
+                onClick = onPlayPause,
+                modifier = Modifier.size(68.dp).shadow(16.dp, CircleShape),
                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = Accent)
             ) {
                 AnimatedContent(isPlaying, label = "playPause") { playing ->
