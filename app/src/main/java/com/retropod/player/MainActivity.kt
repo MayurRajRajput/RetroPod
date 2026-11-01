@@ -353,14 +353,14 @@ private fun RetroPodScreen(
                     Text("RetroPod", color = White, fontSize = 21.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     if (searchOpen) {
                         BasicTextField(
-                            value = query, onValueChange = { query = it },
+                            value = query, onValueChange = { value -> query = value; if (value.isNotBlank()) tab = LibraryTab.SONGS },
                             singleLine = true,
                             modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
                                 .background(SurfaceRaised).padding(horizontal = 12.dp, vertical = 10.dp),
                             textStyle = androidx.compose.ui.text.TextStyle(color = White, fontSize = 14.sp),
                             decorationBox = { inner ->
                                 Box {
-                                    if (query.isEmpty()) Text("Search music", color = Muted, fontSize = 14.sp)
+                                    if (query.isEmpty()) Text("Search songs, artists, albums", color = Muted, fontSize = 13.sp)
                                     inner()
                                 }
                             }
@@ -388,7 +388,7 @@ private fun RetroPodScreen(
                             onOpenPlaylists = { tab = LibraryTab.PLAYLISTS }
                         ) }
                         LibraryTab.SONGS -> Box(Modifier.weight(1f).fillMaxWidth()) { SongsScreen(
-                            songs = filtered, allSongs = songs,
+                            songs = filtered, allSongs = songs, searchQuery = query,
                             onPlay = { song -> playFrom(filtered.indexOf(song), filtered) },
                             onMore = { menuSong = it; showSongMenu = true }
                         ) }
@@ -678,7 +678,7 @@ private fun SectionHeader(title: String, detail: String) {
 
 @Composable
 private fun SongsScreen(
-    songs: List<Song>, allSongs: List<Song>, onPlay: (Song) -> Unit, onMore: (Song) -> Unit
+    songs: List<Song>, allSongs: List<Song>, searchQuery: String, onPlay: (Song) -> Unit, onMore: (Song) -> Unit
 ) {
     val grouped = remember(songs) { songs.groupBy { it.title.firstOrNull()?.uppercaseChar()?.takeIf { c -> c in 'A'..'Z' } ?: '#' } }
     val letters = grouped.keys.sorted()
@@ -691,7 +691,22 @@ private fun SongsScreen(
             contentPadding = PaddingValues(top = 5.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            if (songs.isEmpty()) item { EmptyLibraryMessage() }
+            if (songs.isEmpty()) item {
+                if (allSongs.isEmpty()) EmptyLibraryMessage()
+                else Column(
+                    Modifier.fillMaxWidth().padding(top = 56.dp, start = 18.dp, end = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.SearchOff, null, tint = Muted, modifier = Modifier.size(30.dp))
+                    Text("No matches found", color = White, fontWeight = FontWeight.SemiBold)
+                    Text("Try another song, artist, or album name.", color = Muted, fontSize = 12.sp)
+                }
+            }
+            if (searchQuery.isNotBlank() && songs.isNotEmpty()) item {
+                Text("${songs.size} ${if (songs.size == 1) "result" else "results"}",
+                    color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp, bottom = 3.dp))
+            }
             letters.forEach { letter ->
                 val tracks = grouped[letter].orEmpty()
                 item { Text(letter.toString(), color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp, bottom = 3.dp)) }

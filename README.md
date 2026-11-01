@@ -21,3 +21,7 @@ Targets Android SDK 35, minimum SDK 26, and Java 17. ZIP integrity and XML resou
 
 ## Step 3 — Music player
 See `STAGE-3-PLAYER.md` for changes and verification limitations. This remains a staged source archive, not a device-tested release.
+
+
+## Step 4 — Music library
+See `STAGE-4-LIBRARY.md` for the library/search updates and verification status.
