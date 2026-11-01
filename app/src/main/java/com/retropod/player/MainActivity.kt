@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 81 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) recreate()
     }
@@ -490,7 +490,7 @@ private fun FullPlayer(
         }
         LaunchedEffect(pager.currentPage) {
             if (songs.isNotEmpty() && pager.currentPage != currentIndex) {
-                controller?.seekTo(pager.currentPage)
+                controller?.seekTo(pager.currentPage, 0L)
             }
         }
         HorizontalPager(
