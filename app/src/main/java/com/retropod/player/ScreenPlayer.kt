@@ -2,12 +2,31 @@ package com.retropod.player
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,6 +44,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cast
@@ -35,6 +55,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
@@ -55,15 +76,24 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -77,6 +107,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.media3.common.Player
+import kotlin.math.PI
+import kotlin.math.pow
 import kotlin.math.sin
 
 // ============================================================================ now playing
@@ -84,147 +116,286 @@ import kotlin.math.sin
 @Composable
 internal fun NowPlayingScreen(state: AppState) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val song = state.currentSong
     var moreOpen by remember { mutableStateOf(false) }
     var showVolume by remember { mutableStateOf(false) }
+    var heightPx by remember { mutableIntStateOf(1) }
     val frame = rememberFrameClock(state.isPlaying)
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        RetroTopBar("Now Playing", onBack = { state.pop() }) {
-            IconButton(onClick = {
-                try {
-                    context.startActivity(Intent(Settings.ACTION_CAST_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                } catch (_: Exception) {
-                    try {
-                        context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    } catch (_: Exception) {
-                        state.toast("No output settings available on this device.")
+    // Swipe down = close Now Playing, swipe up = open the queue. The whole screen follows the finger.
+    val dragState = rememberDraggableState { delta ->
+        val floor = -with(density) { 90.dp.toPx() }
+        state.playerDragY = (state.playerDragY + delta).coerceAtLeast(floor)
+    }
+
+    Column(
+        Modifier.fillMaxSize()
+            .onSizeChanged { heightPx = it.height.coerceAtLeast(1) }
+            .draggable(
+                state = dragState,
+                orientation = Orientation.Vertical,
+                onDragStopped = { velocity ->
+                    val closeAt = heightPx * 0.2f
+                    val openAt = -with(density) { 56.dp.toPx() }
+                    when {
+                        state.playerDragY > closeAt || velocity > 1400f -> {
+                            animate(state.playerDragY, heightPx.toFloat(), animationSpec = tween(200)) { value, _ -> state.playerDragY = value }
+                            state.pop()
+                        }
+                        state.playerDragY < openAt || velocity < -1100f -> {
+                            state.playerDragY = 0f
+                            state.openQueue()
+                        }
+                        else -> animate(state.playerDragY, 0f, animationSpec = spring()) { value, _ -> state.playerDragY = value }
                     }
                 }
-            }) { Icon(Icons.Default.Cast, "Output device", tint = White) }
-            Box {
-                IconButton(onClick = { moreOpen = true }) { Icon(Icons.Default.MoreVert, "More", tint = White) }
-                DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
-                    DropdownMenuItem(text = { Text("Visualizer") }, onClick = { moreOpen = false; state.push(Overlay.VISUALIZER) })
-                    DropdownMenuItem(text = { Text("Equalizer") }, onClick = { moreOpen = false; state.push(Overlay.EQUALIZER) })
-                    DropdownMenuItem(text = { Text("Lyrics & queue") }, onClick = { moreOpen = false; state.push(Overlay.LYRICS) })
-                    DropdownMenuItem(text = { Text("More actions…") }, onClick = { moreOpen = false; state.menuSong = song })
+            )
+    ) {
+        Column(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            // ---- top bar: back | Now Playing | equalizer | more
+            Box(Modifier.fillMaxWidth().heightIn(min = 56.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { state.pop() }) {
+                        Icon(Icons.Default.ChevronLeft, "Back", tint = White, modifier = Modifier.size(34.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = { state.push(Overlay.EQUALIZER) }) {
+                        Icon(Icons.Default.Tune, "Equalizer", tint = White, modifier = Modifier.rotate(90f))
+                    }
+                    Box {
+                        IconButton(onClick = { moreOpen = true }) { Icon(Icons.Default.MoreVert, "More", tint = White) }
+                        DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
+                            if (song != null) {
+                                val favorite = state.isFavorite(song.id)
+                                DropdownMenuItem(
+                                    text = { Text(if (favorite) "Remove from favorites" else "Add to favorites") },
+                                    onClick = { moreOpen = false; state.toggleFavorite(song) }
+                                )
+                            }
+                            DropdownMenuItem(text = { Text("Queue") }, onClick = { moreOpen = false; state.openQueue() })
+                            DropdownMenuItem(text = { Text("Lyrics") }, onClick = { moreOpen = false; state.openLyrics() })
+                            DropdownMenuItem(text = { Text("Visualizer") }, onClick = { moreOpen = false; state.push(Overlay.VISUALIZER) })
+                            DropdownMenuItem(text = { Text("Sleep timer") }, onClick = { moreOpen = false; state.push(Overlay.SLEEP) })
+                            DropdownMenuItem(
+                                text = { Text(if (showVolume) "Hide volume" else "Volume") },
+                                onClick = { moreOpen = false; showVolume = !showVolume }
+                            )
+                            DropdownMenuItem(text = { Text("Output device") }, onClick = {
+                                moreOpen = false
+                                try {
+                                    context.startActivity(Intent(Settings.ACTION_CAST_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                } catch (_: Exception) {
+                                    try {
+                                        context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                    } catch (_: Exception) {
+                                        state.toast("No output settings available on this device.")
+                                    }
+                                }
+                            })
+                            DropdownMenuItem(text = { Text("More actions…") }, onClick = { moreOpen = false; state.menuSong = song })
+                        }
+                    }
                 }
+                Text(
+                    "Now Playing", color = White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Center)
+                )
             }
-        }
 
-        val count = state.queue.size.coerceAtLeast(1)
-        val pager = rememberPagerState(initialPage = state.currentIndex.coerceIn(0, count - 1), pageCount = { count })
-        LaunchedEffect(state.currentIndex, count) {
-            val target = state.currentIndex.coerceIn(0, count - 1)
-            if (pager.currentPage != target) pager.animateScrollToPage(target)
-        }
-        LaunchedEffect(pager.settledPage) {
-            if (state.queue.isNotEmpty() && pager.settledPage != state.currentIndex) state.seekToIndex(pager.settledPage)
-        }
-        HorizontalPager(
-            state = pager, contentPadding = PaddingValues(horizontal = 30.dp), pageSpacing = 4.dp,
-            modifier = Modifier.fillMaxWidth().weight(1f, fill = false).heightIn(max = 350.dp)
-        ) { page ->
-            val distance = (page - pager.currentPage).toFloat()
-            val scale by animateFloatAsState(
-                if (!state.animationsEnabled || page == pager.currentPage) 1f else .86f, tween(340), label = "playerCover"
-            )
-            AlbumArtwork(
-                state.queue.getOrNull(page), page,
-                Modifier.fillMaxWidth().aspectRatio(1f).scale(scale).graphicsLayer {
-                    rotationY = if (state.animationsEnabled) distance.coerceIn(-1f, 1f) * -22f else 0f
-                    cameraDistance = 16f * density
-                },
-                24.dp
-            )
-        }
-        Spacer(Modifier.height(18.dp))
-        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(song?.title ?: "Nothing playing", color = White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(song?.artist ?: "Choose a song from your library", color = Muted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (song != null) {
-                val favorite = state.isFavorite(song.id)
-                IconButton(onClick = { state.toggleFavorite(song) }) {
-                    Icon(if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, "Favorite", tint = White, modifier = Modifier.size(26.dp))
+            // ---- artwork: swipe right = next song, swipe left = previous (configurable in Settings)
+            BoxWithConstraints(
+                Modifier.weight(1f).fillMaxWidth().swipeToChangeTrack(state),
+                contentAlignment = Alignment.Center
+            ) {
+                val side = minOf(maxWidth * 0.72f, maxHeight - 12.dp).coerceAtLeast(120.dp)
+                Box(Modifier.size(side)) {
+                    AlbumArtwork(song, Math.floorMod(state.currentIndex, 4), Modifier.fillMaxSize(), 34.dp)
+                    Box(Modifier.fillMaxSize().border(1.dp, Color(0xAAFFFFFF), RoundedCornerShape(34.dp)))
                 }
             }
-        }
-        Spacer(Modifier.height(10.dp))
-        val progress = if (state.duration > 0) (state.position.toFloat() / state.duration).coerceIn(0f, 1f) else 0f
-        if (state.waveformSeek) {
-            WaveSeekBar(
-                progress = progress, playing = state.isPlaying, enabled = state.duration > 0,
+
+            // ---- title + artist
+            Text(
+                song?.title ?: "Nothing playing", color = White, fontSize = 26.sp, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
+            )
+            Text(
+                song?.artist ?: "Choose a song from your library", color = Muted, fontSize = 17.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+            )
+            Spacer(Modifier.height(10.dp))
+
+            // ---- seek bar with glow + times
+            val progress = if (state.duration > 0) (state.position.toFloat() / state.duration).coerceIn(0f, 1f) else 0f
+            GlowSeekBar(
+                progress = progress, playing = state.isPlaying, enabled = state.duration > 0, glow = state.waveformSeek,
                 onSeekFraction = { fraction -> state.seekTo((fraction * state.duration).toLong()) },
-                modifier = Modifier.fillMaxWidth().height(54.dp).padding(horizontal = 6.dp)
+                modifier = Modifier.fillMaxWidth().height(66.dp)
             )
-        } else {
-            var drag by remember { mutableStateOf<Float?>(null) }
-            Slider(
-                value = drag ?: progress, onValueChange = { drag = it },
-                onValueChangeFinished = { drag?.let { state.seekTo((it * state.duration).toLong()) }; drag = null },
-                enabled = state.duration > 0,
-                colors = SliderDefaults.colors(thumbColor = White, activeTrackColor = Accent, inactiveTrackColor = Muted.copy(alpha = .3f))
-            )
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatTime(state.position), color = Muted, fontSize = 11.sp)
-            Text(formatTime(state.duration), color = Muted, fontSize = 11.sp)
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { state.toggleShuffle() }) {
-                Icon(Icons.Default.Shuffle, "Shuffle", tint = if (state.shuffleOn) Accent else Muted)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(formatTime(state.position), color = Muted, fontSize = 13.sp)
+                Text(formatTime(state.duration), color = Muted, fontSize = 13.sp)
             }
-            IconButton(onClick = { state.skipPrevious() }) { Icon(Icons.Default.SkipPrevious, "Previous", tint = White, modifier = Modifier.size(34.dp)) }
-            RingPlayButton(playing = state.isPlaying, size = 76.dp, onClick = { state.togglePlayPause() })
-            IconButton(onClick = { state.skipNext() }) { Icon(Icons.Default.SkipNext, "Next", tint = White, modifier = Modifier.size(34.dp)) }
-            IconButton(onClick = { state.cycleRepeat() }) {
-                Icon(
-                    if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                    "Repeat", tint = if (state.repeatMode == Player.REPEAT_MODE_OFF) Muted else Accent
+            Spacer(Modifier.height(14.dp))
+
+            // ---- transport
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { state.toggleShuffle() }) {
+                    Icon(Icons.Default.Shuffle, "Shuffle", tint = if (state.shuffleOn) Accent else White, modifier = Modifier.size(28.dp))
+                }
+                IconButton(onClick = { state.skipPrevious() }, modifier = Modifier.size(56.dp)) {
+                    Icon(Icons.Default.SkipPrevious, "Previous", tint = White, modifier = Modifier.size(42.dp))
+                }
+                BigPlayPause(playing = state.isPlaying, onClick = { state.togglePlayPause() })
+                IconButton(onClick = { state.skipNext() }, modifier = Modifier.size(56.dp)) {
+                    Icon(Icons.Default.SkipNext, "Next", tint = White, modifier = Modifier.size(42.dp))
+                }
+                IconButton(onClick = { state.cycleRepeat() }) {
+                    Icon(
+                        if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        "Repeat", tint = if (state.repeatMode == Player.REPEAT_MODE_OFF) White else Accent, modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+            if (showVolume) {
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.VolumeDown, null, tint = Muted)
+                    Slider(
+                        value = state.volume, onValueChange = { state.setVolumeLevel(it) },
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                        colors = SliderDefaults.colors(thumbColor = White, activeTrackColor = White, inactiveTrackColor = Muted.copy(alpha = .3f))
+                    )
+                    Icon(Icons.Default.VolumeUp, null, tint = Muted)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        FlowingWaves(playing = state.isPlaying, frame = frame, modifier = Modifier.fillMaxWidth().height(84.dp))
+    }
+}
+
+@Composable
+private fun BigPlayPause(playing: Boolean, onClick: () -> Unit) {
+    Box(Modifier.size(80.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        AnimatedContent(
+            targetState = playing,
+            transitionSpec = { (scaleIn(tween(180), initialScale = .6f) + fadeIn(tween(180))) togetherWith (scaleOut(tween(120), targetScale = .6f) + fadeOut(tween(120))) },
+            label = "bigPlayPause"
+        ) { isPlaying ->
+            if (isPlaying) {
+                Canvas(Modifier.size(width = 40.dp, height = 46.dp)) {
+                    val bar = size.width * 0.36f
+                    val radius = CornerRadius(bar / 2f)
+                    drawRoundRect(White, Offset(0f, 0f), Size(bar, size.height), radius)
+                    drawRoundRect(White, Offset(size.width - bar, 0f), Size(bar, size.height), radius)
+                }
+            } else {
+                Icon(Icons.Default.PlayArrow, "Play", tint = White, modifier = Modifier.size(68.dp))
+            }
+        }
+    }
+}
+
+/** Thin seek bar with a soft, layered glow that rises over the part of the track already played. */
+@Composable
+private fun GlowSeekBar(
+    progress: Float, playing: Boolean, enabled: Boolean, glow: Boolean,
+    onSeekFraction: (Float) -> Unit, modifier: Modifier = Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "seekGlow")
+    val phase by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(3600, easing = LinearEasing)), label = "seekGlowPhase")
+    var dragFraction by remember { mutableStateOf<Float?>(null) }
+    val seek by rememberUpdatedState(onSeekFraction)
+    val shown = (dragFraction ?: progress).coerceIn(0f, 1f)
+    Canvas(
+        modifier
+            .pointerInput(enabled) {
+                detectTapGestures { tap ->
+                    val pad = 11.dp.toPx()
+                    if (enabled && size.width > 0) seek(((tap.x - pad) / (size.width - pad * 2)).coerceIn(0f, 1f))
+                }
+            }
+            .pointerInput(enabled) {
+                detectDragGestures(
+                    onDragStart = { point ->
+                        val pad = 11.dp.toPx()
+                        if (enabled && size.width > 0) dragFraction = ((point.x - pad) / (size.width - pad * 2)).coerceIn(0f, 1f)
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        val pad = 11.dp.toPx()
+                        if (enabled && size.width > 0) dragFraction = ((change.position.x - pad) / (size.width - pad * 2)).coerceIn(0f, 1f)
+                    },
+                    onDragEnd = { dragFraction?.let { seek(it) }; dragFraction = null },
+                    onDragCancel = { dragFraction = null }
+                )
+            }
+    ) {
+        val pad = 11.dp.toPx()
+        val trackWidth = size.width - pad * 2
+        val baseY = size.height - 14.dp.toPx()
+        val cursor = pad + trackWidth * shown
+        val thickness = 5.dp.toPx()
+
+        if (glow && enabled && cursor - pad > 28.dp.toPx()) {
+            val maxHeight = baseY - 4.dp.toPx()
+            val amp = if (playing) 1f else 0.6f
+            val ph = if (playing) phase else 0.2f
+            for (layer in 0 until 3) {
+                val path = Path()
+                path.moveTo(pad, baseY)
+                val steps = 56
+                for (i in 0..steps) {
+                    val u = i / steps.toFloat()
+                    val x = pad + (cursor - pad) * u
+                    val envelope = sin(PI.toFloat() * u).coerceAtLeast(0f).pow(1.4f)
+                    val wave = 0.55f + 0.45f * sin(u * (6f + layer * 2.6f) + ph * 2f * PI.toFloat() * (1f + layer * 0.35f) + layer * 1.7f)
+                    path.lineTo(x, baseY - maxHeight * envelope * wave * (0.92f - layer * 0.22f) * amp)
+                }
+                path.lineTo(cursor, baseY)
+                path.close()
+                drawPath(
+                    path,
+                    Brush.verticalGradient(
+                        listOf(Color.White.copy(alpha = 0.50f - layer * 0.12f), Color.Transparent),
+                        startY = baseY - maxHeight, endY = baseY
+                    )
                 )
             }
         }
-        if (showVolume) {
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.VolumeDown, null, tint = Muted)
-                Slider(
-                    value = state.volume, onValueChange = { state.setVolumeLevel(it) },
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                    colors = SliderDefaults.colors(thumbColor = White, activeTrackColor = Accent, inactiveTrackColor = Muted.copy(alpha = .3f))
-                )
-                Icon(Icons.Default.VolumeUp, null, tint = Muted)
-            }
+        drawLine(Color(0x8CFFFFFF), Offset(pad, baseY), Offset(pad + trackWidth, baseY), thickness, StrokeCap.Round)
+        drawLine(Color.White, Offset(pad, baseY), Offset(cursor, baseY), thickness, StrokeCap.Round)
+        if (enabled) {
+            drawCircle(Color.White, 11.dp.toPx(), Offset(cursor, baseY))
+            drawCircle(Color(0xFF1B2238), 7.dp.toPx(), Offset(cursor, baseY))
         }
-        Spacer(Modifier.height(4.dp))
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            IconButton(onClick = { state.push(Overlay.EQUALIZER) }) { Icon(Icons.Default.Tune, "Equalizer", tint = White) }
-            IconButton(onClick = { showVolume = !showVolume; state.tick() }) { Icon(Icons.Default.VolumeUp, "Volume", tint = if (showVolume) Accent else White) }
-            IconButton(onClick = { state.push(Overlay.SLEEP) }) { Icon(Icons.Default.Timer, "Sleep timer", tint = White) }
-            IconButton(onClick = { state.push(Overlay.LYRICS) }) { Icon(Icons.Default.QueueMusic, "Lyrics and queue", tint = White) }
-        }
-        val accent = Accent
-        val playing = state.isPlaying
-        Canvas(Modifier.fillMaxWidth().height(46.dp)) {
-            val time = frame.value / 450_000_000f
-            val steps = 64
+    }
+}
+
+/** Decorative flowing lines along the bottom edge of Now Playing. They drift while music plays. */
+@Composable
+private fun FlowingWaves(playing: Boolean, frame: State<Long>, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val seconds = frame.value / 1_000_000_000f
+        val amp = if (playing) 1f else 0.7f
+        val steps = 90
+        for (layer in 0 until 4) {
             val path = Path()
-            val faint = Path()
+            val baseY = size.height * (0.55f + layer * 0.08f)
             for (i in 0..steps) {
-                val x = size.width * i / steps
-                val level = bandLevel(i * 31 / steps, 32, frame.value, playing)
-                val amplitude = size.height * 0.42f * level
-                val y = size.height / 2f - amplitude * sin(i * 0.38f + time)
-                val y2 = size.height / 2f + amplitude * 0.6f * sin(i * 0.3f - time * 0.8f)
-                if (i == 0) { path.moveTo(x, y); faint.moveTo(x, y2) } else { path.lineTo(x, y); faint.lineTo(x, y2) }
+                val u = i / steps.toFloat()
+                val x = size.width * u
+                val envelope = 0.3f + 0.7f * sin(PI.toFloat() * u)
+                val y = baseY + size.height * 0.24f * amp * envelope *
+                    sin(u * (4.2f + layer * 0.9f) + seconds * (0.7f + layer * 0.2f) + layer * 1.3f)
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
-            drawPath(faint, accent.copy(alpha = 0.28f), style = Stroke(width = 1.5f.dp.toPx(), cap = StrokeCap.Round))
-            drawPath(path, accent.copy(alpha = 0.85f), style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+            val alpha = if (layer == 0) 0.9f else 0.28f - layer * 0.04f
+            drawPath(path, Color.White.copy(alpha = alpha), style = Stroke(width = (if (layer == 0) 1.8f else 1.1f).dp.toPx(), cap = StrokeCap.Round))
         }
-        Spacer(Modifier.height(6.dp))
     }
 }
 
@@ -232,9 +403,15 @@ internal fun NowPlayingScreen(state: AppState) {
 
 @Composable
 internal fun LyricsQueueScreen(state: AppState) {
-    var tab by remember { mutableIntStateOf(0) }
+    var tab by remember { mutableIntStateOf(state.lyricsTab) }
+    val closeDrag = rememberDraggableState { }
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp)
+                // Swipe down on the header to go back to Now Playing.
+                .draggable(closeDrag, Orientation.Vertical, onDragStopped = { velocity -> if (velocity > 900f) state.pop() }),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             IconButton(onClick = { state.pop() }) { Icon(Icons.Default.ChevronLeft, "Back", tint = White, modifier = Modifier.size(30.dp)) }
             Spacer(Modifier.weight(1f))
             SegmentedPill(listOf("Lyrics", "Queue"), tab, { tab = it; state.tick() })

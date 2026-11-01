@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.util.LruCache
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -26,7 +28,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +39,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -56,7 +63,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -65,7 +74,11 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -81,11 +94,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.pow
 import kotlin.math.sin
 
 // ======================================================================== artwork
@@ -268,17 +283,71 @@ internal fun SongRow(
     }
 }
 
+/** True while the on-screen keyboard is showing. */
+@Composable
+internal fun rememberImeVisible(): Boolean {
+    val density = LocalDensity.current
+    return WindowInsets.ime.getBottom(density) > 0
+}
+
+/**
+ * Horizontal swipe that changes track. The content follows the finger, slides away, and the next/previous
+ * song starts. Direction comes from Settings (default: swipe right = next song).
+ */
+internal fun Modifier.swipeToChangeTrack(state: AppState): Modifier = composed {
+    val offset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    var width by remember { mutableIntStateOf(1) }
+    val dragState = rememberDraggableState { delta -> scope.launch { offset.snapTo(offset.value + delta) } }
+    this
+        .onSizeChanged { width = it.width.coerceAtLeast(1) }
+        .draggable(
+            state = dragState,
+            orientation = Orientation.Horizontal,
+            onDragStopped = { velocity ->
+                val limit = width * 0.22f
+                val direction = when {
+                    offset.value > limit || velocity > 1100f -> 1
+                    offset.value < -limit || velocity < -1100f -> -1
+                    else -> 0
+                }
+                if (direction == 0) {
+                    offset.animateTo(0f, spring())
+                } else {
+                    offset.animateTo(direction * width * 0.9f, tween(130))
+                    val goNext = (direction > 0) == state.swipeRightForNext
+                    if (goNext) state.skipNext() else state.skipPrevious()
+                    state.wheelTick()
+                    offset.snapTo(-direction * width * 0.35f)
+                    offset.animateTo(0f, tween(220))
+                }
+            }
+        )
+        .graphicsLayer {
+            translationX = offset.value
+            alpha = 1f - (abs(offset.value) / width).coerceIn(0f, 0.6f)
+        }
+}
+
 @Composable
 internal fun MiniPlayer(state: AppState, modifier: Modifier = Modifier) {
     if (state.queue.isEmpty()) return
+    if (rememberImeVisible()) return
     val song = state.currentSong
     val fraction = if (state.duration > 0) (state.position.toFloat() / state.duration).coerceIn(0f, 1f) else 0f
+    val verticalDrag = rememberDraggableState { }
     Column(
-        modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp)
+        modifier.fillMaxWidth()
+            .swipeToChangeTrack(state)
+            .draggable(
+                state = verticalDrag, orientation = Orientation.Vertical,
+                onDragStopped = { velocity -> if (velocity < -800f) state.openPlayer() }
+            )
+            .padding(horizontal = 14.dp, vertical = 6.dp)
             .glass(RoundedCornerShape(18.dp)).clickable { state.openPlayer() }
     ) {
         Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            AlbumArtwork(song, 3, Modifier.size(42.dp), 10.dp)
+            AlbumArtwork(song, Math.floorMod(song?.album.hashCode(), 4), Modifier.size(42.dp), 10.dp)
             Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
                 Text(song?.title ?: "Nothing playing", color = White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)

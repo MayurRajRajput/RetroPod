@@ -1,8 +1,11 @@
 package com.retropod.player
 
 import android.Manifest
+import android.app.KeyguardManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.IntentFilter
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -68,6 +71,12 @@ class PlaybackService : MediaSessionService() {
             mainHandler.postDelayed(this, CHECKPOINT_INTERVAL_MS)
         }
     }
+    /** Wakes the lock-screen player when the screen turns on (power button) while music is playing. */
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_SCREEN_ON) showLockScreenPlayer()
+        }
+    }
     private val playerListener = object : Player.Listener {
         override fun onTimelineChanged(timeline: Timeline, reason: Int) {
             scheduleQueueSave()
@@ -131,6 +140,22 @@ class PlaybackService : MediaSessionService() {
         rebuildAudioEffects(exoPlayer.audioSessionId)
         loadArtworkFor(exoPlayer.currentMediaItem)
         mainHandler.postDelayed(checkpointTask, CHECKPOINT_INTERVAL_MS)
+        ContextCompat.registerReceiver(this, screenReceiver, IntentFilter(Intent.ACTION_SCREEN_ON), ContextCompat.RECEIVER_NOT_EXPORTED)
+    }
+
+    private fun showLockScreenPlayer() {
+        try {
+            if (!settings().getBoolean("lock_screen_player", false)) return
+            if (player?.isPlaying != true) return
+            val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager ?: return
+            if (!keyguard.isKeyguardLocked) return
+            startActivity(
+                Intent(this, LockScreenActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
+            )
+        } catch (_: Exception) {
+            // Android may refuse the launch (for example without "Display over other apps"); playback is unaffected.
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -148,6 +173,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(screenReceiver) }
         mainHandler.removeCallbacks(checkpointTask)
         mainHandler.removeCallbacks(sleepTimerTask)
         mainHandler.removeCallbacks(queueSaveTask)

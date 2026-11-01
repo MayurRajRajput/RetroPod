@@ -1,6 +1,7 @@
 package com.retropod.player
 
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -44,6 +46,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +59,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 
 private data class SettingsEntry(val icon: ImageVector, val title: String, val subtitle: String)
 
@@ -65,6 +69,7 @@ private val SETTINGS_ENTRIES = listOf(
     SettingsEntry(Icons.Default.VolumeUp, "Audio", "Equalizer, volume, output"),
     SettingsEntry(Icons.Default.LibraryMusic, "Library", "Scan, filter, exclude folders"),
     SettingsEntry(Icons.Default.AutoAwesome, "Experience", "Haptics, click sound, animations"),
+    SettingsEntry(Icons.Default.Lock, "Lock Screen", "Album art player when you wake a locked phone"),
     SettingsEntry(Icons.Default.Backup, "Backup & Restore", "Playlists, favorites, settings"),
     SettingsEntry(Icons.Default.Info, "About", "RetroPod 2.0")
 )
@@ -108,7 +113,8 @@ internal fun SettingsScreen(state: AppState) {
                 2 -> AudioPage(state)
                 3 -> LibraryPage(state)
                 4 -> ExperiencePage(state)
-                5 -> BackupPage(state)
+                5 -> LockScreenPage(state)
+                6 -> BackupPage(state)
                 else -> AboutPage()
             }
             Spacer(Modifier.height(20.dp))
@@ -186,7 +192,7 @@ private fun AppearancePage(state: AppState) {
         }
     }
     SettingsCard {
-        ToggleRow("Waveform seek bar", "Use the animated wave in Now Playing instead of a plain slider", state.waveformSeek, state::updateWaveformSeek)
+        ToggleRow("Seek bar glow", "Show the animated glow above the Now Playing seek bar", state.waveformSeek, state::updateWaveformSeek)
     }
 }
 
@@ -269,7 +275,13 @@ private fun ExperiencePage(state: AppState) {
     SettingsCard {
         ToggleRow("Haptic feedback", "Subtle tactile response on controls and gestures", state.hapticsEnabled, state::updateHaptics)
         HorizontalDivider(color = Color(0x14FFFFFF))
-        ToggleRow("Interface click sounds", "Play a soft click on controls and the Cover Flow dial", state.clickSoundsEnabled, state::updateClickSounds)
+        ToggleRow("Interface click sounds", "Play a click on controls, the Cover Flow wheel and cover swipes", state.clickSoundsEnabled, state::updateClickSounds)
+        HorizontalDivider(color = Color(0x14FFFFFF))
+        ToggleRow(
+            "Swipe right for next song",
+            "Mini player and album art: swipe right = next, left = previous. Turn off to reverse.",
+            state.swipeRightForNext, state::updateSwipeDirection
+        )
         HorizontalDivider(color = Color(0x14FFFFFF))
         ToggleRow("Smooth animations", "Cover flow depth and screen transitions", state.animationsEnabled, state::updateAnimations)
     }
@@ -285,6 +297,52 @@ private fun ExperiencePage(state: AppState) {
             }
         }
     }
+}
+
+private fun openOverlaySettings(state: AppState) {
+    try {
+        state.context.startActivity(
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + state.context.packageName))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    } catch (_: Exception) {
+        state.toast("Open Android Settings > Apps > RetroPod > Display over other apps.", long = true)
+    }
+}
+
+@Composable
+private fun LockScreenPage(state: AppState) {
+    val context = state.context
+    var canOverlay by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            canOverlay = Settings.canDrawOverlays(context)
+            delay(1000L)
+        }
+    }
+    SettingsCard {
+        ToggleRow(
+            "Lock screen player",
+            "Press the power button while music plays to see the album art and controls over the lock screen",
+            state.lockScreenPlayer
+        ) { enabled ->
+            state.updateLockScreenPlayer(enabled)
+            if (enabled && !canOverlay) {
+                state.toast("Allow \"Display over other apps\" for RetroPod so Android lets it appear.", long = true)
+                openOverlaySettings(state)
+            }
+        }
+    }
+    SettingsCard {
+        ActionRow(
+            Icons.Default.Lock, "Display over other apps",
+            if (canOverlay) "Allowed" else "Not allowed yet. Tap to open Android settings"
+        ) { openOverlaySettings(state) }
+    }
+    Text(
+        "Android only lets an app wake over the lock screen when this permission is on. Swipe up on the lock screen player to unlock as usual. The regular lock-screen media card keeps working either way.",
+        color = Muted, fontSize = 12.sp
+    )
 }
 
 @Composable
@@ -303,7 +361,7 @@ private fun AboutPage() {
             PodLogo(Modifier.size(width = 44.dp, height = 66.dp))
             Spacer(Modifier.height(6.dp))
             Text("RetroPod 2.0", color = White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            Text("Version 2.7.0", color = Muted, fontSize = 13.sp)
+            Text("Version 2.8.0", color = Muted, fontSize = 13.sp)
             Text("A local music player, made for the love of music.", color = Muted, fontSize = 13.sp)
             Text("Music, Timelessly.", color = White, fontSize = 13.sp)
         }

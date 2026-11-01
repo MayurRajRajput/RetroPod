@@ -65,6 +65,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -275,7 +276,7 @@ internal fun SearchTab(state: AppState) {
             it.title.contains(query, true) || it.artist.contains(query, true) || it.album.contains(query, true)
         }
     }
-    Column(Modifier.fillMaxSize().imePadding()) {
+    Column(Modifier.fillMaxSize()) {
         RetroTopBar("Search", onBack = { state.tab = Tab.HOME })
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).glass(RoundedCornerShape(16.dp))
@@ -352,19 +353,48 @@ internal fun AlbumsTab(state: AppState) {
 @Composable
 private fun CoverFlowView(state: AppState) {
     val albums = state.albums
-    val pager = rememberPagerState(pageCount = { albums.size })
+    CoverFlow(
+        state = state,
+        count = albums.size,
+        titleOf = { albums[it].first },
+        subtitleOf = { "${albums[it].second.firstOrNull()?.artist ?: "Unknown artist"} • ${albums[it].second.size} tracks" },
+        artOf = { albums[it].second.firstOrNull() },
+        isPlayingItem = { state.currentSong?.album == albums[it].first },
+        onOpen = { state.playList(albums[it].second, 0) },
+        onPlayPause = { index, playingThis ->
+            if (playingThis) state.togglePlayPause() else state.playList(albums[index].second, 0, openPlayer = false)
+        }
+    )
+}
+
+/** Shared Cover Flow + click-wheel used by Albums and Playlists. */
+@Composable
+private fun CoverFlow(
+    state: AppState,
+    count: Int,
+    titleOf: (Int) -> String,
+    subtitleOf: (Int) -> String,
+    artOf: (Int) -> Song?,
+    isPlayingItem: (Int) -> Boolean,
+    onOpen: (Int) -> Unit,
+    onPlayPause: (Int, Boolean) -> Unit
+) {
+    val pager = rememberPagerState(pageCount = { count })
     val scope = rememberCoroutineScope()
     var firstPage by remember { mutableStateOf(true) }
-    LaunchedEffect(pager.currentPage) { if (firstPage) firstPage = false else state.tick() }
-    val page = pager.currentPage.coerceIn(0, albums.lastIndex)
-    val album = albums[page]
+    var lastWheelAt by remember { mutableLongStateOf(0L) }
+    // Finger swipes on the covers click too; steps from the wheel already clicked themselves.
+    LaunchedEffect(pager.currentPage) {
+        if (firstPage) firstPage = false
+        else if (System.currentTimeMillis() - lastWheelAt > 250L) state.wheelTick()
+    }
+    val page = pager.currentPage.coerceIn(0, count - 1)
 
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
         HorizontalPager(
             state = pager, contentPadding = PaddingValues(horizontal = 72.dp), pageSpacing = 4.dp,
             modifier = Modifier.fillMaxWidth().weight(1f), beyondViewportPageCount = 2
         ) { index ->
-            val entry = albums[index]
             val distance = (pager.currentPage - index) + pager.currentPageOffsetFraction
             val amount = abs(distance).coerceIn(0f, 1f)
             Column(
@@ -375,13 +405,13 @@ private fun CoverFlowView(state: AppState) {
                     rotationY = if (state.animationsEnabled) distance.coerceIn(-1f, 1f) * -40f else 0f
                     cameraDistance = 14f * density
                     alpha = 1f - amount * 0.35f
-                }.clickable { state.playList(entry.second, 0) },
+                }.clickable { onOpen(index) },
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                AlbumArtwork(entry.second.firstOrNull(), index, Modifier.fillMaxWidth().aspectRatio(1f), 20.dp)
+                AlbumArtwork(artOf(index), index, Modifier.fillMaxWidth().aspectRatio(1f), 20.dp)
                 Box(Modifier.fillMaxWidth().height(54.dp).clipToBounds()) {
                     AlbumArtwork(
-                        entry.second.firstOrNull(), index,
+                        artOf(index), index,
                         Modifier.fillMaxWidth().wrapContentHeight(Alignment.Top, unbounded = true).aspectRatio(1f)
                             .graphicsLayer { scaleY = -1f; alpha = .16f },
                         20.dp
@@ -390,19 +420,18 @@ private fun CoverFlowView(state: AppState) {
                 }
             }
         }
-        Text(album.first, color = White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 24.dp))
-        Text(
-            "${album.second.firstOrNull()?.artist ?: "Unknown artist"} • ${album.second.size} tracks",
-            color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 3.dp)
-        )
+        Text(titleOf(page), color = White, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 24.dp))
+        Text(subtitleOf(page), color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 3.dp))
         Box(Modifier.fillMaxWidth().height(172.dp).padding(horizontal = 28.dp)) {
             ClickDial(
                 onStep = { direction ->
-                    scope.launch { pager.animateScrollToPage((pager.currentPage + direction).coerceIn(0, albums.lastIndex)) }
+                    lastWheelAt = System.currentTimeMillis()
+                    state.wheelTick()
+                    scope.launch { pager.animateScrollToPage((pager.currentPage + direction).coerceIn(0, count - 1)) }
                 },
                 modifier = Modifier.fillMaxSize()
             )
-            val playingThis = state.currentSong?.album == album.first
+            val playingThis = isPlayingItem(page)
             Row(
                 Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(top = 70.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically
@@ -410,14 +439,14 @@ private fun CoverFlowView(state: AppState) {
                 IconButton(onClick = { state.skipPrevious() }) { Icon(Icons.Default.SkipPrevious, "Previous", tint = White, modifier = Modifier.size(30.dp)) }
                 RingPlayButton(
                     playing = playingThis && state.isPlaying, size = 66.dp,
-                    onClick = { if (playingThis) state.togglePlayPause() else state.playList(album.second, 0, openPlayer = false) }
+                    onClick = { onPlayPause(page, playingThis) }
                 )
                 IconButton(onClick = { state.skipNext() }) { Icon(Icons.Default.SkipNext, "Next", tint = White, modifier = Modifier.size(30.dp)) }
             }
         }
         Row(Modifier.padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val first = (page - 2).coerceAtLeast(0)
-            val last = (first + 3).coerceAtMost(albums.lastIndex)
+            val last = (first + 3).coerceAtMost(count - 1)
             for (dot in first..last) {
                 Box(Modifier.size(7.dp).clip(CircleShape).background(if (dot == page) White else Color(0x44FFFFFF)))
             }
@@ -449,6 +478,7 @@ private fun AlbumGrid(state: AppState) {
 
 @Composable
 internal fun PlaylistsTab(state: AppState) {
+    var mode by remember { mutableStateOf(0) }
     Column(Modifier.fillMaxSize()) {
         RetroTopBar("Playlists", onBack = { state.tab = Tab.HOME }) {
             IconButton(onClick = { state.showCreatePlaylist = true; state.tick() }) { Icon(Icons.Default.Add, "Create playlist", tint = White) }
@@ -456,16 +486,44 @@ internal fun PlaylistsTab(state: AppState) {
         if (state.playlistOrder.isEmpty()) {
             EmptyState("No playlists yet", "Tap + to create your first collection.")
         } else {
-            LazyColumn(
-                Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                itemsIndexed(state.playlistOrder.toList(), key = { _, name -> name }) { index, name ->
-                    PlaylistRow(state, name, index)
+            Box(Modifier.fillMaxWidth().padding(bottom = 4.dp), contentAlignment = Alignment.Center) {
+                SegmentedPill(listOf("Cover Flow", "List"), mode, { mode = it; state.tick() })
+            }
+            if (mode == 0) {
+                PlaylistCoverFlow(state)
+            } else {
+                LazyColumn(
+                    Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    itemsIndexed(state.playlistOrder.toList(), key = { _, name -> name }) { index, name ->
+                        PlaylistRow(state, name, index)
+                    }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun PlaylistCoverFlow(state: AppState) {
+    val names = state.playlistOrder.toList()
+    if (names.isEmpty()) return
+    CoverFlow(
+        state = state,
+        count = names.size,
+        titleOf = { names[it] },
+        subtitleOf = { "${state.playlists[names[it]].orEmpty().size} songs" },
+        artOf = { state.playlistSongs(names[it]).firstOrNull() },
+        isPlayingItem = { index ->
+            val ids = state.playlists[names[index]].orEmpty()
+            ids.isNotEmpty() && state.queue.size == ids.size && state.queue.map { it.id } == ids
+        },
+        onOpen = { state.openPlaylist(names[it]) },
+        onPlayPause = { index, playingThis ->
+            if (playingThis) state.togglePlayPause() else state.playPlaylist(names[index], openPlayer = false)
+        }
+    )
 }
 
 @Composable

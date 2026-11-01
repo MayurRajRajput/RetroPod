@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -63,6 +64,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -71,6 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import kotlinx.coroutines.delay
@@ -83,6 +86,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Edge-to-edge on every Android version so the keyboard is handled in exactly one place (imePadding below).
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = android.graphics.Color.BLACK
         window.navigationBarColor = android.graphics.Color.BLACK
         AppContextHolder.context = applicationContext
@@ -221,7 +226,7 @@ private fun RetroPodApp(controller: MediaController?, openPlayerRequest: Int, sh
     }
 
     Box(Modifier.fillMaxSize().background(Night)) {
-        Box(Modifier.fillMaxSize().systemBarsPadding()) {
+        Box(Modifier.fillMaxSize().systemBarsPadding().imePadding()) {
             MainScaffold(state)
             OverlayHost(state)
             state.menuSong?.let { SongContextMenu(state, it) }
@@ -258,8 +263,11 @@ private fun MainScaffold(state: AppState) {
                 }
             }
         }
-        MiniPlayer(state)
-        BottomNav(state)
+        // The keyboard must never sit on top of (or push up) the mini player and tab bar, so hide them while typing.
+        if (!rememberImeVisible()) {
+            MiniPlayer(state)
+            BottomNav(state)
+        }
     }
 }
 
@@ -316,17 +324,27 @@ private fun OverlayHost(state: AppState) {
         if (overlay == null) {
             Spacer(Modifier.fillMaxSize())
         } else {
+            // Screens that don't draw their own mini player get one here, so playback is always one tap away.
+            val showMini = overlay == Overlay.SETTINGS || overlay == Overlay.PLAYLIST_DETAIL || overlay == Overlay.SLEEP
+            val dragModifier = if (overlay == Overlay.PLAYER) {
+                Modifier.graphicsLayer { translationY = state.playerDragY }
+            } else Modifier
             Box(
-                Modifier.fillMaxSize().background(Night).pointerInput(Unit) { detectTapGestures { } }
+                Modifier.fillMaxSize().then(dragModifier).background(Night).pointerInput(Unit) { detectTapGestures { } }
             ) {
-                when (overlay) {
-                    Overlay.PLAYER -> NowPlayingScreen(state)
-                    Overlay.VISUALIZER -> VisualizerScreen(state)
-                    Overlay.EQUALIZER -> EqualizerScreen(state)
-                    Overlay.LYRICS -> LyricsQueueScreen(state)
-                    Overlay.SLEEP -> SleepTimerScreen(state)
-                    Overlay.SETTINGS -> SettingsScreen(state)
-                    Overlay.PLAYLIST_DETAIL -> PlaylistDetailScreen(state)
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        when (overlay) {
+                            Overlay.PLAYER -> NowPlayingScreen(state)
+                            Overlay.VISUALIZER -> VisualizerScreen(state)
+                            Overlay.EQUALIZER -> EqualizerScreen(state)
+                            Overlay.LYRICS -> LyricsQueueScreen(state)
+                            Overlay.SLEEP -> SleepTimerScreen(state)
+                            Overlay.SETTINGS -> SettingsScreen(state)
+                            Overlay.PLAYLIST_DETAIL -> PlaylistDetailScreen(state)
+                        }
+                    }
+                    if (showMini) MiniPlayer(state)
                 }
             }
         }

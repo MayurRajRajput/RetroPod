@@ -1,4 +1,4 @@
-RETROPOD 2.7.0 PROJECT CONTENTS
+RETROPOD 2.8.0 PROJECT CONTENTS
 
 app/src/main/java/com/retropod/player:
 - MainActivity.kt      Activity, app root, tabs, bottom nav, overlay host, dialogs
@@ -11,6 +11,8 @@ app/src/main/java/com/retropod/player:
 - ScreenAudio.kt       Visualizer, Equalizer, Sleep Timer
 - ScreenSettings.kt    Settings pages
 - Library.kt           MediaStore scan, lyrics parser, helpers
+- LockScreenActivity.kt  Album-art player shown over the lock screen (Settings > Lock Screen)
+- ClickSound.kt       SoundPool click used by the Cover Flow wheel and controls (res/raw/wheel_click.wav)
 - Theme.kt, Song.kt, RetroPodApplication.kt
 
 Build: GitHub Actions (.github/workflows/build-apk.yml) or Android Studio. Not compiled in the authoring environment.

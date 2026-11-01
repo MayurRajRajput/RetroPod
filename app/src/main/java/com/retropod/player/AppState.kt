@@ -10,7 +10,6 @@ import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import android.view.HapticFeedbackConstants
-import android.view.SoundEffectConstants
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.IntentSenderRequest
@@ -72,7 +71,9 @@ internal class AppState(
     var userName by mutableStateOf("Mayur")
     var hapticsEnabled by mutableStateOf(true)
     var animationsEnabled by mutableStateOf(true)
-    var clickSoundsEnabled by mutableStateOf(false)
+    var clickSoundsEnabled by mutableStateOf(true)
+    var swipeRightForNext by mutableStateOf(true)
+    var lockScreenPlayer by mutableStateOf(false)
     var waveformSeek by mutableStateOf(true)
     var resumeSession by mutableStateOf(true)
     var skipSilence by mutableStateOf(false)
@@ -106,6 +107,10 @@ internal class AppState(
     val overlays = mutableStateListOf<Overlay>()
     var selectedPlaylist by mutableStateOf<String?>(null)
     var settingsPage by mutableStateOf<Int?>(null)
+    /** 0 = Lyrics, 1 = Queue. Read by the Lyrics & Queue screen when it opens. */
+    var lyricsTab by mutableIntStateOf(0)
+    /** Vertical drag offset (px) of the Now Playing screen while it is being swiped. */
+    var playerDragY by mutableFloatStateOf(0f)
     var menuSong by mutableStateOf<Song?>(null)
     var detailsSong by mutableStateOf<Song?>(null)
     var showCreatePlaylist by mutableStateOf(false)
@@ -123,6 +128,7 @@ internal class AppState(
     private var pendingDelete: Song? = null
 
     init {
+        ClickSound.init(context)
         reloadFromPrefs()
         permissionGranted = hasAudioPermission()
         micGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -137,7 +143,13 @@ internal class AppState(
     /** Haptic tick and optional click sound, each controlled from Settings > Experience. */
     fun tick() {
         if (hapticsEnabled) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-        if (clickSoundsEnabled) view.playSoundEffect(SoundEffectConstants.CLICK)
+        if (clickSoundsEnabled) ClickSound.play(0.35f)
+    }
+
+    /** Louder, wheel-style click used by the Cover Flow dial and cover swipes. */
+    fun wheelTick() {
+        if (hapticsEnabled) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        if (clickSoundsEnabled) ClickSound.play(0.85f)
     }
 
     // ================================================================ navigation
@@ -152,11 +164,23 @@ internal class AppState(
     }
 
     fun openPlayer() {
+        playerDragY = 0f
         if (Overlay.PLAYER in overlays) {
             while (overlays.lastOrNull() != Overlay.PLAYER) overlays.removeAt(overlays.lastIndex)
         } else {
             overlays.add(Overlay.PLAYER)
         }
+    }
+
+    fun openQueue() {
+        lyricsTab = 1
+        if (overlays.lastOrNull() != Overlay.LYRICS) overlays.add(Overlay.LYRICS)
+        tick()
+    }
+
+    fun openLyrics() {
+        lyricsTab = 0
+        push(Overlay.LYRICS)
     }
 
     fun openPlaylist(name: String) {
@@ -423,10 +447,10 @@ internal class AppState(
         tick()
     }
 
-    fun playPlaylist(name: String, shuffled: Boolean = false) {
+    fun playPlaylist(name: String, shuffled: Boolean = false, openPlayer: Boolean = true) {
         val list = playlistSongs(name)
         if (list.isEmpty()) { toast("This playlist is empty."); return }
-        playList(if (shuffled) list.shuffled() else list, 0)
+        playList(if (shuffled) list.shuffled() else list, 0, openPlayer)
     }
 
     // ================================================================ lyrics
@@ -462,7 +486,9 @@ internal class AppState(
         userName = settingsPrefs.getString("user_name", "Mayur") ?: "Mayur"
         hapticsEnabled = settingsPrefs.getBoolean("haptics", true)
         animationsEnabled = settingsPrefs.getBoolean("animations", true)
-        clickSoundsEnabled = settingsPrefs.getBoolean("click_sounds", false)
+        clickSoundsEnabled = settingsPrefs.getBoolean("click_sounds", true)
+        swipeRightForNext = settingsPrefs.getBoolean("swipe_right_next", true)
+        lockScreenPlayer = settingsPrefs.getBoolean("lock_screen_player", false)
         waveformSeek = settingsPrefs.getBoolean("waveform_seek", true)
         resumeSession = settingsPrefs.getBoolean("resume_session", true)
         skipSilence = settingsPrefs.getBoolean("skip_silence", false)
@@ -504,6 +530,8 @@ internal class AppState(
     fun updateHaptics(value: Boolean) { hapticsEnabled = value; settingsPrefs.edit().putBoolean("haptics", value).apply() }
     fun updateAnimations(value: Boolean) { animationsEnabled = value; settingsPrefs.edit().putBoolean("animations", value).apply() }
     fun updateClickSounds(value: Boolean) { clickSoundsEnabled = value; settingsPrefs.edit().putBoolean("click_sounds", value).apply() }
+    fun updateSwipeDirection(value: Boolean) { swipeRightForNext = value; settingsPrefs.edit().putBoolean("swipe_right_next", value).apply() }
+    fun updateLockScreenPlayer(value: Boolean) { lockScreenPlayer = value; settingsPrefs.edit().putBoolean("lock_screen_player", value).apply() }
     fun updateWaveformSeek(value: Boolean) { waveformSeek = value; settingsPrefs.edit().putBoolean("waveform_seek", value).apply() }
     fun updateResumeSession(value: Boolean) { resumeSession = value; settingsPrefs.edit().putBoolean("resume_session", value).apply() }
     fun updateSkipSilence(value: Boolean) {
