@@ -55,3 +55,7 @@ This environment does not contain Android SDK/Gradle tooling, and this source ar
 Earlier stage notes identify unfinished items, including local/embedded lyrics, complete sleep-timer lifecycle behavior, and comprehensive device testing. A UI control or stage note is not proof of a complete implementation. Review `STAGE-6-AUDIO.md` and `STAGE-7-BACKGROUND-PLAYBACK.md` alongside actual device tests before calling this a finished release.
 
 **Release status: source package assembled; build and physical-device verification pending.**
+
+
+## Follow-up consolidation
+The consolidated `2.5.0-final-source` package adds local LRC/plain-text lyric import and a persisted service-owned sleep timer. These additions have not been Gradle-built or device-tested. See `FINAL-IMPLEMENTATION-STATUS.md`.

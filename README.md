@@ -42,3 +42,8 @@ See `STAGE-7-BACKGROUND-PLAYBACK.md` for MediaSession service persistence, pause
 ## Step 9 — Final integration and quality review
 
 This archive consolidates the staged project source, updates the app version to `2.4.8-stage9`, and aligns the GitHub Actions artifact name. See `STAGE-9-FINAL-QA.md` for the static checks performed, build instructions, device QA checklist, and outstanding verification. This is not a build-verified release APK.
+
+
+## Consolidated final source package — 2.5.0
+
+Adds a service-owned sleep timer and per-track local LRC/plain-text lyric import with playback-synchronized LRC display. Lyrics preferences are included in JSON backup/restore. See `FINAL-IMPLEMENTATION-STATUS.md` for exact scope and verification limitations. This archive is not a build-verified APK.

@@ -20,6 +20,10 @@ import androidx.media3.session.MediaSessionService
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var player: ExoPlayer? = null
+    private val sleepTimerTask = Runnable {
+        player?.pause()
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove(KEY_SLEEP_DEADLINE).apply()
+    }
     private val checkpointHandler = Handler(Looper.getMainLooper())
     private val checkpointTask = object : Runnable {
         override fun run() {
@@ -48,7 +52,9 @@ class PlaybackService : MediaSessionService() {
         }
         player = exoPlayer
         activePlayer = exoPlayer
+        activeService = this
         restorePlaybackState(exoPlayer)
+        restoreSleepTimer()
         exoPlayer.addListener(playerListener)
         mediaSession = MediaSession.Builder(this, exoPlayer).build()
         checkpointHandler.postDelayed(checkpointTask, CHECKPOINT_INTERVAL_MS)
@@ -69,17 +75,47 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         checkpointHandler.removeCallbacks(checkpointTask)
+        checkpointHandler.removeCallbacks(sleepTimerTask)
         player?.let { current ->
             savePlaybackState(current)
             current.removeListener(playerListener)
         }
         activePlayer = null
+        activeService = null
         releaseEqualizer()
         mediaSession?.release()
         mediaSession = null
         player?.release()
         player = null
         super.onDestroy()
+    }
+
+    /** Persist a wall-clock deadline so the timer survives Activity and service recreation. */
+    private fun setSleepTimerMinutes(minutes: Int) {
+        checkpointHandler.removeCallbacks(sleepTimerTask)
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        if (minutes <= 0) {
+            prefs.edit().remove(KEY_SLEEP_DEADLINE).apply()
+            return
+        }
+        val deadline = System.currentTimeMillis() + minutes.coerceIn(1, 24 * 60) * 60_000L
+        prefs.edit().putLong(KEY_SLEEP_DEADLINE, deadline).apply()
+        scheduleSleepTimer(deadline)
+    }
+
+    private fun restoreSleepTimer() {
+        val deadline = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getLong(KEY_SLEEP_DEADLINE, 0L)
+        if (deadline <= 0L) return
+        if (deadline <= System.currentTimeMillis()) {
+            sleepTimerTask.run()
+        } else {
+            scheduleSleepTimer(deadline)
+        }
+    }
+
+    private fun scheduleSleepTimer(deadline: Long) {
+        checkpointHandler.removeCallbacks(sleepTimerTask)
+        checkpointHandler.postDelayed(sleepTimerTask, (deadline - System.currentTimeMillis()).coerceAtLeast(0L))
     }
 
     private fun savePlaybackState(current: Player) {
@@ -148,9 +184,15 @@ class PlaybackService : MediaSessionService() {
         private const val KEY_ITEMS = "media_items"
         private const val KEY_INDEX = "current_index"
         private const val KEY_POSITION = "position_ms"
+        private const val KEY_SLEEP_DEADLINE = "sleep_timer_deadline"
         private const val CHECKPOINT_INTERVAL_MS = 1_000L
 
+        @Volatile private var activeService: PlaybackService? = null
         @Volatile private var activePlayer: ExoPlayer? = null
+
+        fun setSleepTimer(minutes: Int) {
+            activeService?.setSleepTimerMinutes(minutes)
+        }
         @Volatile private var equalizer: Equalizer? = null
         @Volatile private var equalizerSession: Int = 0
 

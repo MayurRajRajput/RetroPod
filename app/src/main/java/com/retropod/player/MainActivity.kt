@@ -206,6 +206,9 @@ private fun RetroPodScreen(
     var showSongMenu by remember { mutableStateOf(false) }
     var showTrackDetails by remember { mutableStateOf<Song?>(null) }
     var showQueue by remember { mutableStateOf(false) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var currentLyrics by remember { mutableStateOf("") }
+    val lyricsPrefs = remember { context.getSharedPreferences("retropod_lyrics", Context.MODE_PRIVATE) }
     val settingsPrefs = remember { context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE) }
     var hapticsEnabled by remember { mutableStateOf(settingsPrefs.getBoolean("haptics", true)) }
     var animationsEnabled by remember { mutableStateOf(settingsPrefs.getBoolean("animations", true)) }
@@ -223,6 +226,31 @@ private fun RetroPodScreen(
     var currentIndex by remember { mutableIntStateOf(0) }
     var recentIds by remember { mutableStateOf(emptyList<Long>()) }
     val playlists: SnapshotStateMap<String, MutableList<Long>> = remember { mutableStateMapOf() }
+
+    val lyricsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            val trackId = queueSongs.getOrNull(currentIndex)?.id
+            if (trackId != null) {
+                try {
+                    val text = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                        ?: error("Unable to read lyrics file")
+                    if (text.length > 250_000) error("Lyrics file is too large")
+                    lyricsPrefs.edit().putString(trackId.toString(), text).apply()
+                    currentLyrics = text
+                    Toast.makeText(context, "Lyrics imported for this track.", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Couldn't import lyrics: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                Toast.makeText(context, "Play a track before importing lyrics.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    LaunchedEffect(queueSongs.getOrNull(currentIndex)?.id) {
+        val trackId = queueSongs.getOrNull(currentIndex)?.id
+        currentLyrics = if (trackId == null) "" else lyricsPrefs.getString(trackId.toString(), "") ?: ""
+    }
     val playlistOrder = remember { mutableStateListOf<String>() }
 
     fun haptic() {
@@ -236,7 +264,7 @@ private fun RetroPodScreen(
         if (uri != null) {
             try {
                 val root = JSONObject()
-                listOf("retropod_settings", "retropod_library").forEach { prefName ->
+                listOf("retropod_settings", "retropod_library", "retropod_lyrics").forEach { prefName ->
                     val prefObject = JSONObject()
                     context.getSharedPreferences(prefName, Context.MODE_PRIVATE).all.forEach { (key, value) ->
                         val entry = JSONObject()
@@ -267,7 +295,7 @@ private fun RetroPodScreen(
                 val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
                     ?: error("Unable to read backup file")
                 val root = JSONObject(raw)
-                listOf("retropod_settings", "retropod_library").forEach { prefName ->
+                listOf("retropod_settings", "retropod_library", "retropod_lyrics").forEach { prefName ->
                     val obj = root.optJSONObject(prefName) ?: return@forEach
                     val editor = context.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit().clear()
                     obj.keys().forEach { key ->
@@ -436,6 +464,9 @@ private fun RetroPodScreen(
                     onNext = { controller?.seekToNextMediaItem(); haptic() },
                     onSeek = { controller?.seekTo(it) },
                     onQueue = { showQueue = true },
+                    lyricsText = currentLyrics,
+                    onImportLyrics = { lyricsPicker.launch(arrayOf("text/plain", "application/octet-stream", "application/x-subrip")) },
+                    onSleepTimer = { showSleepTimerDialog = true },
                     animationsEnabled = animationsEnabled
                 )
             } else {
@@ -606,6 +637,43 @@ private fun RetroPodScreen(
                     }
                 },
                 confirmButton = { TextButton(onClick = { showQueue = false }) { Text("Done", color = Accent) } }
+            )
+        }
+        if (showSleepTimerDialog) {
+            AlertDialog(
+                onDismissRequest = { showSleepTimerDialog = false },
+                containerColor = SurfaceNight,
+                title = { Text("Sleep timer", color = White) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Pause playback automatically after:", color = Muted)
+                        listOf(15, 30, 45, 60, 90, 120).forEach { minutes ->
+                            TextButton(
+                                onClick = {
+                                    PlaybackService.setSleepTimer(minutes)
+                                    showSleepTimerDialog = false
+                                    Toast.makeText(context, "Sleep timer set for $minutes minutes.", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("$minutes minutes", color = White)
+                            }
+                        }
+                        TextButton(
+                            onClick = {
+                                PlaybackService.setSleepTimer(0)
+                                showSleepTimerDialog = false
+                                Toast.makeText(context, "Sleep timer cancelled.", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Cancel sleep timer", color = Accent) }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showSleepTimerDialog = false }) {
+                        Text("Close", color = Accent)
+                    }
+                }
             )
         }
         if (showSettings) {
@@ -1160,12 +1228,15 @@ private fun FullPlayer(
     volume: Float, onVolume: (Float) -> Unit, shuffle: Boolean, repeat: Boolean,
     onShuffle: () -> Unit, onRepeat: () -> Unit, onBack: () -> Unit,
     onPlayPause: () -> Unit, onPrevious: () -> Unit, onNext: () -> Unit,
-    onSeek: (Long) -> Unit, onQueue: () -> Unit, animationsEnabled: Boolean
+    onSeek: (Long) -> Unit, onQueue: () -> Unit,
+    lyricsText: String, onImportLyrics: () -> Unit, onSleepTimer: () -> Unit,
+    animationsEnabled: Boolean
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, "Close player", tint = White) }
             Text("NOW PLAYING", color = Muted, fontSize = 10.sp, letterSpacing = 3.sp, modifier = Modifier.weight(1f))
+            IconButton(onClick = onSleepTimer) { Icon(Icons.Default.Timer, "Sleep timer", tint = White) }
             IconButton(onClick = onQueue) { Icon(Icons.Default.QueueMusic, "Show queue", tint = White) }
             IconButton(onClick = onRepeat) { Icon(Icons.Default.Repeat, "Repeat", tint = if (repeat) Accent else Muted) }
         }
@@ -1227,7 +1298,25 @@ private fun FullPlayer(
             IconButton(onClick = onNext) { Icon(Icons.Default.SkipNext, "Next", tint = White, modifier = Modifier.size(31.dp)) }
             IconButton(onClick = onRepeat) { Icon(Icons.Default.Repeat, "Repeat", tint = if (repeat) Accent else Muted) }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
+        val lyricLine = remember(lyricsText, position) { synchronizedLyricLine(lyricsText, position) }
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                .background(SurfaceNight).padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                lyricLine.ifBlank { if (lyricsText.isBlank()) "No local lyrics imported" else "Lyrics will appear here" },
+                color = if (lyricLine.isBlank()) Muted else White,
+                fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis
+            )
+            TextButton(onClick = onImportLyrics) {
+                Icon(Icons.Default.Description, null, tint = Accent, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(if (lyricsText.isBlank()) "Import .LRC lyrics" else "Replace lyrics file", color = Accent, fontSize = 11.sp)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.VolumeDown, null, tint = Muted)
             Slider(
@@ -1444,6 +1533,32 @@ private fun AlbumArtwork(song: Song?, artIndex: Int, modifier: Modifier = Modifi
 
 object AppContextHolder {
     lateinit var context: Context
+}
+
+private fun synchronizedLyricLine(lrc: String, positionMs: Long): String {
+    if (lrc.isBlank()) return ""
+    val timePattern = Regex("""\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]""")
+    val timedLines = mutableListOf<Pair<Long, String>>()
+    lrc.lineSequence().forEach { line ->
+        val matches = timePattern.findAll(line).toList()
+        if (matches.isNotEmpty()) {
+            val lyric = line.replace(timePattern, "").trim()
+            matches.forEach { match ->
+                val minutes = match.groupValues[1].toLongOrNull() ?: 0L
+                val seconds = match.groupValues[2].toLongOrNull() ?: 0L
+                val fractionRaw = match.groupValues.getOrNull(3).orEmpty()
+                val fraction = when (fractionRaw.length) {
+                    1 -> (fractionRaw.toLongOrNull() ?: 0L) * 100L
+                    2 -> (fractionRaw.toLongOrNull() ?: 0L) * 10L
+                    else -> fractionRaw.take(3).toLongOrNull() ?: 0L
+                }
+                timedLines += (minutes * 60_000L + seconds * 1_000L + fraction) to lyric
+            }
+        }
+    }
+    if (timedLines.isEmpty()) return lrc.lineSequence().take(4).joinToString("\n").take(500)
+    return timedLines.sortedBy { it.first }
+        .lastOrNull { it.first <= positionMs }?.second.orEmpty()
 }
 
 private fun formatTime(ms: Long): String {
