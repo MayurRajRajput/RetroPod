@@ -1404,6 +1404,32 @@ private fun SettingsDialog(
 }
 
 @Composable
+private fun SettingsActionRow(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(SurfaceNight)
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = Accent)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, color = White, fontWeight = FontWeight.Medium)
+            Text(subtitle, color = Muted, fontSize = 11.sp)
+        }
+        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Muted)
+    }
+}
+
+@Composable
 private fun EqualizerPresetRow(equalizerPreset: Int, onSelect: (Int) -> Unit) {
     val context = LocalContext.current
     var expanded by remember { mutableStateOf(false) }
