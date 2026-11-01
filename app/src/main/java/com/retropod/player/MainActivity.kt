@@ -50,7 +50,6 @@ fun RetroPodApp() {
     val coroutineScope = rememberCoroutineScope()
     var backPressedOnce by remember { mutableStateOf(false) }
 
-    // Global Double Back Handler
     BackHandler {
         if (currentRoute != "home") {
             navController.popBackStack("home", inclusive = false)
@@ -98,7 +97,6 @@ fun RetroPodApp() {
             }
         }
     ) { innerPadding ->
-        // Wrapper Box to handle Global Haptics (Swipe)
         Box(
             modifier = Modifier
                 .padding(innerPadding)
@@ -114,7 +112,6 @@ fun RetroPodApp() {
                     }
                 }
         ) {
-            // Animated Navigation Host
             NavHost(
                 navController = navController, 
                 startDestination = "home",
@@ -127,8 +124,6 @@ fun RetroPodApp() {
                 composable("songs") { SongsScreen(navController) }
                 composable("playing") { NowPlayingScreen(navController) }
                 composable("settings") { SettingsScreen(navController) }
-                
-                // Detailed Sub-Screens (Accessible via NowPlaying or Navigation setup)
                 composable("equalizer") { EqualizerScreen(navController) }
                 composable("coverflow") { CoverFlowScreen(navController) }
                 composable("sleeptimer") { SleepTimerScreen(navController) }

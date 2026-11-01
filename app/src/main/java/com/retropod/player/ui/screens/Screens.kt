@@ -57,7 +57,6 @@ fun HomeScreen(navController: NavController) {
         }
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Mock horizontal list
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             listOf("Biogenesis", "Starboy", "After Dark").forEach { title ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -93,7 +92,6 @@ fun SongsScreen(navController: NavController) {
             }
         }
         
-        // Tabs
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Box(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(Color.White).padding(horizontal = 16.dp, vertical = 6.dp)) {
                 Text("All", color = Color.Black, fontSize = 14.sp)
@@ -129,10 +127,15 @@ fun SongsScreen(navController: NavController) {
 fun NowPlayingScreen(navController: NavController) {
     Column(modifier = Modifier.fillMaxSize().background(RetroBlack).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Back", tint = Color.White)
+            IconButton(onClick = { navController.popBackStack() }) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Back", tint = Color.White)
+            }
             Text("Now Playing", color = Color.White)
-            Icon(Icons.Default.Cast, contentDescription = "Cast", tint = Color.White)
-            Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = Color.White)
+            Row {
+                Icon(Icons.Default.Cast, contentDescription = "Cast", tint = Color.White)
+                Spacer(modifier = Modifier.width(16.dp))
+                Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = Color.White)
+            }
         }
         Spacer(modifier = Modifier.height(32.dp))
         Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -165,12 +168,19 @@ fun NowPlayingScreen(navController: NavController) {
         
         Spacer(modifier = Modifier.height(32.dp))
         
-        // Bottom Actions
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            Icon(Icons.Default.Tune, contentDescription = "Equalizer", tint = Color.White)
-            Icon(Icons.Default.VolumeUp, contentDescription = "Volume", tint = Color.White)
-            Icon(Icons.Default.Timer, contentDescription = "Timer", tint = Color.White)
-            Icon(Icons.Default.QueueMusic, contentDescription = "Queue", tint = Color.White)
+            IconButton(onClick = { navController.navigate("equalizer") }) {
+                Icon(Icons.Default.Tune, contentDescription = "Equalizer", tint = Color.White)
+            }
+            IconButton(onClick = { navController.navigate("coverflow") }) {
+                Icon(Icons.Default.Album, contentDescription = "Cover Flow", tint = Color.White)
+            }
+            IconButton(onClick = { navController.navigate("sleeptimer") }) {
+                Icon(Icons.Default.Timer, contentDescription = "Timer", tint = Color.White)
+            }
+            IconButton(onClick = { navController.navigate("lyrics") }) {
+                Icon(Icons.Default.QueueMusic, contentDescription = "Lyrics", tint = Color.White)
+            }
         }
     }
 }
@@ -194,7 +204,7 @@ fun SettingsScreen(navController: NavController) {
         )
         settings.forEach { setting ->
             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White) // Placeholder icon
+                Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White)
                 Spacer(modifier = Modifier.width(16.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(setting.first, color = Color.White, fontWeight = FontWeight.Bold)
@@ -210,7 +220,9 @@ fun SettingsScreen(navController: NavController) {
 fun EqualizerScreen(navController: NavController) {
     Column(modifier = Modifier.fillMaxSize().background(RetroBlack).padding(24.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.ChevronLeft, contentDescription = "Back", tint = Color.White)
+            IconButton(onClick = { navController.popBackStack() }) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Back", tint = Color.White)
+            }
             Text("Equalizer", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Switch(checked = true, onCheckedChange = {})
         }
@@ -247,13 +259,11 @@ fun CoverFlowScreen(navController: NavController) {
             }
         }
         Spacer(modifier = Modifier.height(48.dp))
-        // Mock Cover Flow Center Item
         Box(modifier = Modifier.size(200.dp).background(RetroSurface))
         Spacer(modifier = Modifier.height(32.dp))
         Text("Biogenesis", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Text("Silicon Based Lifeforms", color = RetroGray, fontSize = 16.sp)
         Spacer(modifier = Modifier.height(48.dp))
-        // Mock Scroll Wheel
         Box(modifier = Modifier.size(200.dp).clip(CircleShape).border(2.dp, RetroSurface, CircleShape), contentAlignment = Alignment.Center) {
             Box(modifier = Modifier.size(60.dp).clip(CircleShape).background(Color.White)) {
                 Icon(Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.align(Alignment.Center))
@@ -266,13 +276,14 @@ fun CoverFlowScreen(navController: NavController) {
 fun SleepTimerScreen(navController: NavController) {
     Column(modifier = Modifier.fillMaxSize().background(RetroBlack).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.ChevronLeft, contentDescription = "Back", tint = Color.White)
+            IconButton(onClick = { navController.popBackStack() }) {
+                Icon(Icons.Default.ChevronLeft, contentDescription = "Back", tint = Color.White)
+            }
             Text("Sleep Timer", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Icon(Icons.Default.MoreVert, contentDescription = "More", tint = RetroBlack) // Spacer
+            Icon(Icons.Default.MoreVert, contentDescription = "More", tint = RetroBlack)
         }
         Spacer(modifier = Modifier.height(48.dp))
         
-        // Large Circular Timer
         Box(modifier = Modifier.size(250.dp).clip(CircleShape).border(2.dp, RetroSurface, CircleShape), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("30", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Bold)
@@ -301,15 +312,22 @@ fun SleepTimerScreen(navController: NavController) {
 @Composable
 fun LyricsScreen(navController: NavController) {
     Column(modifier = Modifier.fillMaxSize().background(RetroBlack).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            Box(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(RetroSurface).padding(horizontal = 16.dp, vertical = 6.dp)) {
-                Text("Lyrics", color = Color.White, fontSize = 14.sp)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = { navController.popBackStack() }) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Back", tint = Color.White)
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Box(modifier = Modifier.clip(RoundedCornerShape(16.dp)).border(1.dp, RetroGray, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 6.dp)) {
-                Text("Queue", color = RetroGray, fontSize = 14.sp)
+            Row(horizontalArrangement = Arrangement.Center) {
+                Box(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(RetroSurface).padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Text("Lyrics", color = Color.White, fontSize = 14.sp)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Box(modifier = Modifier.clip(RoundedCornerShape(16.dp)).border(1.dp, RetroGray, RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Text("Queue", color = RetroGray, fontSize = 14.sp)
+                }
             }
+            Icon(Icons.Default.MoreVert, contentDescription = "More", tint = RetroBlack)
         }
+        
         Spacer(modifier = Modifier.height(48.dp))
         Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
             Text("I've been losing sleep", color = RetroGray, fontSize = 20.sp)
@@ -321,38 +339,6 @@ fun LyricsScreen(navController: NavController) {
             Text("It's like a dark paradise", color = RetroGray, fontSize = 20.sp)
             Text("No one else can see", color = RetroGray, fontSize = 20.sp)
             Text("But you and me", color = RetroGray, fontSize = 20.sp)
-        }
-    }
-}
-
-@Composable
-fun PlaylistMenuOverlay() {
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
-        GlassCard(modifier = Modifier.fillMaxWidth(0.8f)) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(40.dp).background(RetroSurface))
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text("Biogenesis", color = Color.White, fontWeight = FontWeight.Bold)
-                        Text("Silicon Based Lifeforms", color = RetroGray, fontSize = 12.sp)
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-                Divider(color = RetroSurface)
-                Spacer(modifier = Modifier.height(16.dp))
-                val options = listOf("Play Next", "Add to Queue", "Add to Playlist", "Add to Favorites", "Song Details", "Share", "Delete from Device")
-                options.forEach { option ->
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Row {
-                            Icon(Icons.Default.Menu, contentDescription = null, tint = Color.White) // Placeholder icons
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(option, color = Color.White)
-                        }
-                        if (option == "Add to Playlist") Icon(Icons.Default.ChevronRight, contentDescription = null, tint = RetroGray)
-                    }
-                }
-            }
         }
     }
 }
