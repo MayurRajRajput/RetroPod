@@ -20,18 +20,29 @@ class PlaybackService : MediaSessionService() {
                 true
             )
             setHandleAudioBecomingNoisy(true)
+            volume = 1f
         }
+        activePlayer = exoPlayer
         mediaSession = MediaSession.Builder(this, exoPlayer).build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     override fun onDestroy() {
+        activePlayer = null
         mediaSession?.let {
             it.player.release()
             it.release()
         }
         mediaSession = null
         super.onDestroy()
+    }
+
+    companion object {
+        @Volatile private var activePlayer: ExoPlayer? = null
+
+        fun setPlaybackVolume(value: Float) {
+            activePlayer?.volume = value.coerceIn(0f, 1f)
+        }
     }
 }

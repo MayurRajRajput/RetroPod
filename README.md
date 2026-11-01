@@ -1,30 +1,48 @@
-# RetroPod — complete Android music player project
+# RetroPod 2.0 — Android local music player
 
-RetroPod is an iPod-inspired local music player starter for Android. It includes:
-- Album library grouped from music on the device
-- Song list and search across song, artist and album names
-- Embedded album artwork extraction from audio files
-- Four original fallback album-art images included in the project
-- Animated player transitions and playback controls
-- Previous / play-pause / next and seek controls
-- AndroidX Media3 ExoPlayer + MediaSessionService for background playback and system media controls
-- GitHub Actions cloud build workflow
+RetroPod is a dark, iPod-inspired local music player built with Kotlin, Jetpack Compose and AndroidX Media3.
 
-## Build the APK from a phone using GitHub
+## Included in this project
+
+- Local music library scanning through Android MediaStore (`READ_MEDIA_AUDIO` on Android 13+, legacy read permission on older Android versions).
+- Songs, albums, playlists and Home destinations in an icon-only bottom navigation bar.
+- Search icon that expands into a compact search field.
+- A–Z fast-jump rail in the Songs screen.
+- Album cover-flow style horizontal swipe navigation.
+- Now Playing screen with swipeable queue, seek/progress control, shuffle, repeat and in-app playback volume.
+- Media3 ExoPlayer and MediaSessionService for background playback and system media controls.
+- Playlist creation, persistence on device, add-to-playlist actions, and playlist deletion.
+- Track details and Android share sheet from the song actions menu.
+- AMOLED-friendly dark theme, purple accent, animated transitions and optional haptic feedback.
+- Haptics and animation preferences stored locally.
+- Custom RetroPod launcher icon (adaptive and legacy density assets).
+- GitHub Actions workflow that builds and uploads a debug APK.
+
+## Build with GitHub Actions
+
 1. Extract this ZIP.
-2. Upload the **contents** of the `RetroPod-Everything` folder to the root of your GitHub repository. Do not upload the ZIP itself.
-3. Keep the `.github` folder; it contains the APK build workflow.
-4. Open the repository's Actions tab.
-5. Choose **Build RetroPod APK** and tap **Run workflow** (or push to `main` to trigger it).
-6. When the run succeeds, download the `RetroPod-debug-apk` artifact.
-7. Extract the artifact ZIP and install `app-debug.apk`.
+2. Upload the **contents** of this folder to the root of your GitHub repository. Keep the `.github` folder.
+3. Commit and push to the `main` branch, or open **Actions → Build RetroPod APK → Run workflow**.
+4. Wait for the build job to finish.
+5. Download the `RetroPod-debug-apk` artifact from the successful run.
+6. Extract that artifact ZIP and install `app-debug.apk` on your Android phone.
 
-## Gradle setup
-The GitHub Actions workflow installs Gradle 8.9 using `gradle/actions/setup-gradle`, then runs `gradle :app:assembleDebug`. This project therefore does not require `gradlew` or `gradle/wrapper/gradle-wrapper.jar` for the cloud build. The root and app Gradle configuration files are included.
+The workflow installs Gradle 8.9 and uses Java 17. A Gradle wrapper is not required for this cloud workflow.
 
-## Notes
-- Requires Java 17 and Android SDK platform 35 in the GitHub runner; GitHub's hosted Ubuntu runner provides the Android SDK.
-- The app requests audio library permission when first opened.
-- Background playback uses an Android media session. System notification/lock-screen behavior depends on Android's media controls and notification settings.
-- This is a complete starter project, but it has not been compiled on a real Android device in this environment. Run the GitHub Actions build and share any error log if it fails; compatibility issues may need a small correction.
-- A debug APK is for direct testing. A Play Store release requires a signed release build.
+## Important testing notes
+
+- This ZIP is a source project, not a prebuilt APK.
+- The source was updated from the repository ZIP supplied in this conversation. The Android build could not be executed in this environment because an Android SDK/Gradle build environment was not available.
+- Run the included GitHub Actions build before installing. If it reports a Kotlin or Android build error, share the failing log so the exact issue can be corrected.
+- Test media permission, scanning, background playback, playlist persistence, share action, shuffle/repeat, and volume on the phone.
+- The in-app volume control adjusts the ExoPlayer instance while the app's playback service is active. It is separate from the phone's hardware volume buttons.
+- Haptic feedback depends on the phone's hardware and system vibration settings.
+- Some audio files may not provide embedded album artwork; the included fallback artwork is used in that case.
+- A debug APK is intended for testing. A Play Store release requires a separately configured signing key and release build.
+
+## Project layout
+
+- `app/src/main/java/com/retropod/player/` — Kotlin application and playback service.
+- `app/src/main/res/` — launcher icons, theme resources and album fallback artwork.
+- `app/build.gradle.kts` — Android app build configuration and dependencies.
+- `.github/workflows/build-apk.yml` — cloud APK build and artifact upload.
