@@ -25,3 +25,7 @@ See `STAGE-3-PLAYER.md` for changes and verification limitations. This remains a
 
 ## Step 4 — Music library
 See `STAGE-4-LIBRARY.md` for the library/search updates and verification status.
+
+
+## Step 5 — Playlist and queue management
+See `STAGE-5-PLAYLIST-QUEUE.md` for the new playlist editing and queue controls, plus verification limitations.

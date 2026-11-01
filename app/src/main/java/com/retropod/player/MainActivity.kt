@@ -199,6 +199,8 @@ private fun RetroPodScreen(
     var showCreatePlaylist by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
     var selectedPlaylist by remember { mutableStateOf<String?>(null) }
+    var renamePlaylistFrom by remember { mutableStateOf<String?>(null) }
+    var renamePlaylistTo by remember { mutableStateOf("") }
     var menuSong by remember { mutableStateOf<Song?>(null) }
     var showSongMenu by remember { mutableStateOf(false) }
     var showTrackDetails by remember { mutableStateOf<Song?>(null) }
@@ -217,13 +219,14 @@ private fun RetroPodScreen(
     var currentIndex by remember { mutableIntStateOf(0) }
     var recentIds by remember { mutableStateOf(emptyList<Long>()) }
     val playlists: SnapshotStateMap<String, MutableList<Long>> = remember { mutableStateMapOf() }
+    val playlistOrder = remember { mutableStateListOf<String>() }
 
     fun haptic() {
         if (hapticsEnabled) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
     }
 
     fun loadPlaylists() {
-        playlists.clear()
+        playlists.clear(); playlistOrder.clear()
         val prefs = context.getSharedPreferences("retropod_library", Context.MODE_PRIVATE)
         val raw = prefs.getString("playlists_json", "{}") ?: "{}"
         try {
@@ -234,7 +237,16 @@ private fun RetroPodScreen(
                 for (i in 0 until arr.length()) ids += arr.optLong(i)
                 playlists[name] = ids
             }
-        } catch (_: Exception) { /* keep an empty library if stored data is damaged */ }
+            val savedOrder = prefs.getString("playlist_order", null)
+            if (savedOrder != null) {
+                val orderArray = JSONArray(savedOrder)
+                for (i in 0 until orderArray.length()) {
+                    val name = orderArray.optString(i)
+                    if (name in playlists && name !in playlistOrder) playlistOrder.add(name)
+                }
+            }
+            playlists.keys.forEach { if (it !in playlistOrder) playlistOrder.add(it) }
+        } catch (_: Exception) { playlists.clear(); playlistOrder.clear() }
     }
 
     fun savePlaylists() {
@@ -244,8 +256,9 @@ private fun RetroPodScreen(
             ids.forEach { id -> arr.put(id) }
             obj.put(name, arr)
         }
+        val order = JSONArray().apply { playlistOrder.filter { it in playlists }.forEach { put(it) } }
         context.getSharedPreferences("retropod_library", Context.MODE_PRIVATE)
-            .edit().putString("playlists_json", obj.toString()).apply()
+            .edit().putString("playlists_json", obj.toString()).putString("playlist_order", order.toString()).apply()
     }
 
     fun refreshLibrary() {
@@ -398,14 +411,28 @@ private fun RetroPodScreen(
                             animationsEnabled = animationsEnabled
                         ) }
                         LibraryTab.PLAYLISTS -> Box(Modifier.weight(1f).fillMaxWidth()) { PlaylistsScreen(
-                            playlists = playlists, songs = songs,
+                            playlists = playlists, playlistOrder = playlistOrder, songs = songs,
                             onCreate = { showCreatePlaylist = true },
                             onPlay = { name ->
                                 val list = playlists[name].orEmpty().mapNotNull { id -> songs.find { it.id == id } }
                                 if (list.isNotEmpty()) playFrom(0, list)
                                 else Toast.makeText(context, "This playlist is empty.", Toast.LENGTH_SHORT).show()
                             },
-                            onDelete = { name -> playlists.remove(name); savePlaylists(); haptic() },
+                            onDelete = { name -> playlists.remove(name); playlistOrder.remove(name); savePlaylists(); haptic() },
+                            onRename = { name -> renamePlaylistFrom = name; renamePlaylistTo = name },
+                            onMove = { name, delta ->
+                                val index = playlistOrder.indexOf(name)
+                                val target = index + delta
+                                if (index >= 0 && target in playlistOrder.indices) {
+                                    val moved = playlistOrder.removeAt(index)
+                                    playlistOrder.add(target, moved)
+                                    savePlaylists(); haptic()
+                                }
+                            },
+                            onRemoveSong = { name, song ->
+                                playlists[name] = playlists[name].orEmpty().filterNot { it == song.id }.toMutableList()
+                                savePlaylists(); haptic()
+                            },
                             onMore = { song -> menuSong = song; showSongMenu = true }
                         ) }
                     }
@@ -469,6 +496,25 @@ private fun RetroPodScreen(
                                     Text(song.artist, color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                                 if (index == currentIndex) Text("PLAYING", color = Accent, fontSize = 9.sp)
+                                IconButton(onClick = {
+                                    if (index > currentIndex) {
+                                        controller?.moveMediaItem(index, index - 1)
+                                        val reordered = queueSongs.toMutableList().apply { add(index - 1, removeAt(index)) }
+                                        queueSongs = reordered; currentIndex = controller?.currentMediaItemIndex ?: currentIndex; haptic()
+                                    }
+                                }, enabled = index > currentIndex) { Icon(Icons.Default.KeyboardArrowUp, "Move up", tint = if (index > currentIndex) White else Muted.copy(alpha = .3f)) }
+                                IconButton(onClick = {
+                                    if (index > currentIndex && index < queueSongs.lastIndex) {
+                                        controller?.moveMediaItem(index, index + 1)
+                                        queueSongs = queueSongs.toMutableList().apply { add(index + 1, removeAt(index)) }; haptic()
+                                    }
+                                }, enabled = index > currentIndex && index < queueSongs.lastIndex) { Icon(Icons.Default.KeyboardArrowDown, "Move down", tint = if (index > currentIndex && index < queueSongs.lastIndex) White else Muted.copy(alpha = .3f)) }
+                                IconButton(onClick = {
+                                    if (index > currentIndex) {
+                                        controller?.removeMediaItem(index)
+                                        queueSongs = queueSongs.toMutableList().apply { removeAt(index) }; haptic()
+                                    }
+                                }, enabled = index > currentIndex) { Icon(Icons.Default.Close, "Remove from queue", tint = if (index > currentIndex) Muted else Muted.copy(alpha = .3f)) }
                             }
                         }
                     }
@@ -510,6 +556,7 @@ private fun RetroPodScreen(
                         val name = newPlaylistName.trim()
                         if (name.isNotEmpty() && !playlists.containsKey(name)) {
                             playlists[name] = mutableListOf()
+                            playlistOrder.add(name)
                             savePlaylists()
                             showCreatePlaylist = false
                             newPlaylistName = ""
@@ -519,6 +566,36 @@ private fun RetroPodScreen(
                     }) { Text("Create", color = Accent) }
                 },
                 dismissButton = { TextButton(onClick = { showCreatePlaylist = false }) { Text("Cancel", color = Muted) } }
+            )
+        }
+        renamePlaylistFrom?.let { oldName ->
+            AlertDialog(
+                onDismissRequest = { renamePlaylistFrom = null },
+                containerColor = SurfaceNight,
+                title = { Text("Rename playlist", color = White) },
+                text = {
+                    OutlinedTextField(
+                        value = renamePlaylistTo, onValueChange = { renamePlaylistTo = it },
+                        singleLine = true, label = { Text("New name") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = White, unfocusedTextColor = White,
+                            focusedBorderColor = Accent, unfocusedBorderColor = Muted
+                        )
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val newName = renamePlaylistTo.trim()
+                        if (newName.isNotEmpty() && (newName == oldName || !playlists.containsKey(newName))) {
+                            val contents = playlists[oldName].orEmpty().toMutableList()
+                            playlists.remove(oldName); playlists[newName] = contents
+                            val orderIndex = playlistOrder.indexOf(oldName)
+                            if (orderIndex >= 0) playlistOrder[orderIndex] = newName else playlistOrder.add(newName)
+                            savePlaylists(); renamePlaylistFrom = null; haptic()
+                        } else Toast.makeText(context, "Choose a unique playlist name.", Toast.LENGTH_SHORT).show()
+                    }) { Text("Save", color = Accent) }
+                },
+                dismissButton = { TextButton(onClick = { renamePlaylistFrom = null }) { Text("Cancel", color = Muted) } }
             )
         }
         if (showSongMenu && menuSong != null) {
@@ -823,9 +900,10 @@ private fun AlbumsScreen(
 
 @Composable
 private fun PlaylistsScreen(
-    playlists: Map<String, List<Long>>, songs: List<Song>,
+    playlists: Map<String, List<Long>>, playlistOrder: List<String>, songs: List<Song>,
     onCreate: () -> Unit, onPlay: (String) -> Unit, onDelete: (String) -> Unit,
-    onMore: (Song) -> Unit
+    onRename: (String) -> Unit, onMove: (String, Int) -> Unit,
+    onRemoveSong: (String, Song) -> Unit, onMore: (Song) -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -841,7 +919,7 @@ private fun PlaylistsScreen(
             EmptyLibraryMessage(title = "No playlists yet", detail = "Tap + to create your first playlist.")
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp), contentPadding = PaddingValues(bottom = 12.dp)) {
-                playlists.keys.sorted().forEach { name ->
+                playlistOrder.filter { it in playlists }.forEach { name ->
                     val tracks = playlists[name].orEmpty().mapNotNull { id -> songs.find { it.id == id } }
                     item(key = name) {
                         Row(
@@ -857,7 +935,16 @@ private fun PlaylistsScreen(
                                 Text(name, color = White, fontWeight = FontWeight.SemiBold)
                                 Text("${tracks.size} songs", color = Muted, fontSize = 11.sp)
                             }
-                            IconButton(onClick = { onDelete(name) }) { Icon(Icons.Default.DeleteOutline, "Delete playlist", tint = Muted) }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row {
+                                    IconButton(onClick = { onMove(name, -1) }) { Icon(Icons.Default.KeyboardArrowUp, "Move playlist up", tint = Muted) }
+                                    IconButton(onClick = { onMove(name, 1) }) { Icon(Icons.Default.KeyboardArrowDown, "Move playlist down", tint = Muted) }
+                                }
+                                Row {
+                                    IconButton(onClick = { onRename(name) }) { Icon(Icons.Default.Edit, "Rename playlist", tint = Muted) }
+                                    IconButton(onClick = { onDelete(name) }) { Icon(Icons.Default.DeleteOutline, "Delete playlist", tint = Muted) }
+                                }
+                            }
                         }
                     }
                     items(tracks, key = { "${name}_${it.id}" }) { song ->
@@ -866,7 +953,8 @@ private fun PlaylistsScreen(
                                 Text(song.title, color = White, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(song.artist, color = Muted, fontSize = 10.sp)
                             }
-                            IconButton(onClick = { onMore(song) }) { Icon(Icons.Default.MoreVert, null, tint = Muted) }
+                            IconButton(onClick = { onMore(song) }) { Icon(Icons.Default.MoreVert, "Track actions", tint = Muted) }
+                            IconButton(onClick = { onRemoveSong(name, song) }) { Icon(Icons.Default.RemoveCircleOutline, "Remove from playlist", tint = Muted) }
                         }
                     }
                 }
