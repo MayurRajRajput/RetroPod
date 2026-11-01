@@ -1,32 +1,19 @@
-# RetroPod 2.0 — AMOLED Edition
+# RetroPod 2.0
 
-RetroPod is an Android local music player built with Kotlin, Jetpack Compose and AndroidX Media3.
+Android local music player built with Kotlin, Jetpack Compose and AndroidX Media3.
 
-## Included
-- Existing Media3 ExoPlayer + MediaSession background playback architecture
-- Local device music scanning and embedded/fallback album artwork
-- Home, Songs, Albums and Playlists destinations
-- Persistent user playlists and add-to-playlist actions
-- Song details and Android share intent
-- Full-screen settings destination (not a settings pop-up)
-- Pure-black AMOLED palette with neutral monochrome accent
-- Compact bottom icon navigation and mini-player
-- Animated player controls, seek progress and album swipe pager
-- In-app playback volume control
-- Haptic and animation preferences
-- Custom launcher icon resources
-- GitHub Actions workflow to build and upload a debug APK
+## Playback lifecycle
+- Playback is owned by a `MediaSessionService`, not by the Activity.
+- Dismissing the app UI / locking the phone does not intentionally stop active playback.
+- The active song and playback position are checkpointed while playing and when the player state changes.
+- If Android later destroys the playback service, the next app launch restores the last selected track at its saved position in a paused state. It does not unexpectedly auto-play.
+- Pausing from the notification keeps the last track available for the next launch.
 
-## Build from GitHub
-1. Extract the ZIP.
-2. Upload the contents of this folder to the root of your repository (keep `.github`).
-3. Commit and push to `main`, or run **Build RetroPod APK** from Actions.
-4. Download the `RetroPod-2.0-debug-apk` artifact and extract `app-debug.apk`.
+## Build
+The GitHub Actions workflow uses Java 17 and Gradle 8.9 and runs `:app:assembleDebug`.
+Push to `main` or manually run the workflow, then download the `RetroPod-debug-apk` artifact.
 
-## Build environment
-The workflow uses Java 17 and Gradle 8.9. It runs `:app:assembleDebug`.
+## Important scope and verification
+This ZIP is based on the supplied `RetroPod-master.zip`. It includes the playback-state persistence change and retains the existing app source and playback architecture. The supplied source did not contain a Cover Flow page-indicator dot row, so no such indicator was added. This ZIP does not magically include the full visual redesign or every optional feature discussed in design mockups (for example lyrics, sleep timer, and a full equalizer); those require additional implementation.
 
-## Important verification note
-This project ZIP has been packaged and its archive integrity checked. A complete Android Gradle build and on-device test have not been run in this environment. Treat the GitHub Actions result as the build verification step. Test playback, library permissions, playlists, sharing, haptics, volume, and background playback on the phone before replacing your existing installed build.
-
-The debug APK is intended for direct testing. A signed release build is needed for Play Store distribution.
+The archive is integrity-checked, but an Android Gradle build and on-device test have not been run in this environment. Confirm that GitHub Actions succeeds, then test library permissions, playback, notification controls, screen locking, dismissing the app from recents, and reopening after service/process recreation before treating this as a verified release.
