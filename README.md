@@ -37,3 +37,8 @@ See `STAGE-6-AUDIO.md` for implemented equalizer integration and outstanding aud
 
 ## Step 7 — Background playback and restoration
 See `STAGE-7-BACKGROUND-PLAYBACK.md` for MediaSession service persistence, paused restoration, and testing limitations.
+\n\n## Step 8 — Settings and personalization\nSee `STAGE-8-SETTINGS.md` for click-sound preferences and JSON settings/library backup and restore, with verification limitations.\n
+
+## Step 9 — Final integration and quality review
+
+This archive consolidates the staged project source, updates the app version to `2.4.8-stage9`, and aligns the GitHub Actions artifact name. See `STAGE-9-FINAL-QA.md` for the static checks performed, build instructions, device QA checklist, and outstanding verification. This is not a build-verified release APK.

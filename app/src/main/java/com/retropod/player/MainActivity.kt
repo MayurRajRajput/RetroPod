@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.database.Cursor
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.Bundle
@@ -205,8 +206,10 @@ private fun RetroPodScreen(
     var showSongMenu by remember { mutableStateOf(false) }
     var showTrackDetails by remember { mutableStateOf<Song?>(null) }
     var showQueue by remember { mutableStateOf(false) }
-    var hapticsEnabled by remember { mutableStateOf(context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).getBoolean("haptics", true)) }
-    var animationsEnabled by remember { mutableStateOf(context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).getBoolean("animations", true)) }
+    val settingsPrefs = remember { context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE) }
+    var hapticsEnabled by remember { mutableStateOf(settingsPrefs.getBoolean("haptics", true)) }
+    var animationsEnabled by remember { mutableStateOf(settingsPrefs.getBoolean("animations", true)) }
+    var clickSoundsEnabled by remember { mutableStateOf(settingsPrefs.getBoolean("click_sounds", false)) }
     var equalizerPreset by remember { mutableIntStateOf(context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).getInt("equalizer_preset", 0)) }
     var volume by remember { mutableFloatStateOf(1f) }
     var shuffleEnabled by remember { mutableStateOf(false) }
@@ -224,6 +227,74 @@ private fun RetroPodScreen(
 
     fun haptic() {
         if (hapticsEnabled) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        if (clickSoundsEnabled) view.playSoundEffect(android.view.SoundEffectConstants.CLICK)
+    }
+
+    val backupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val root = JSONObject()
+                listOf("retropod_settings", "retropod_library").forEach { prefName ->
+                    val prefObject = JSONObject()
+                    context.getSharedPreferences(prefName, Context.MODE_PRIVATE).all.forEach { (key, value) ->
+                        val entry = JSONObject()
+                        when (value) {
+                            is Boolean -> { entry.put("type", "boolean"); entry.put("value", value) }
+                            is Int -> { entry.put("type", "int"); entry.put("value", value) }
+                            is Long -> { entry.put("type", "long"); entry.put("value", value) }
+                            is Float -> { entry.put("type", "float"); entry.put("value", value.toDouble()) }
+                            is String -> { entry.put("type", "string"); entry.put("value", value) }
+                            is Set<*> -> { entry.put("type", "strings"); entry.put("value", JSONArray(value.toList())) }
+                        }
+                        prefObject.put(key, entry)
+                    }
+                    root.put(prefName, prefObject)
+                }
+                context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(root.toString(2)) }
+                Toast.makeText(context, "RetroPod backup saved.", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Couldn't save backup: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val raw = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: error("Unable to read backup file")
+                val root = JSONObject(raw)
+                listOf("retropod_settings", "retropod_library").forEach { prefName ->
+                    val obj = root.optJSONObject(prefName) ?: return@forEach
+                    val editor = context.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit().clear()
+                    obj.keys().forEach { key ->
+                        val entry = obj.optJSONObject(key) ?: return@forEach
+                        when (entry.optString("type")) {
+                            "boolean" -> editor.putBoolean(key, entry.optBoolean("value"))
+                            "int" -> editor.putInt(key, entry.optInt("value"))
+                            "long" -> editor.putLong(key, entry.optLong("value"))
+                            "float" -> editor.putFloat(key, entry.optDouble("value").toFloat())
+                            "string" -> editor.putString(key, entry.optString("value"))
+                            "strings" -> {
+                                val arr = entry.optJSONArray("value") ?: JSONArray()
+                                editor.putStringSet(key, (0 until arr.length()).map { arr.optString(it) }.toSet())
+                            }
+                        }
+                    }
+                    editor.apply()
+                }
+                hapticsEnabled = settingsPrefs.getBoolean("haptics", true)
+                animationsEnabled = settingsPrefs.getBoolean("animations", true)
+                clickSoundsEnabled = settingsPrefs.getBoolean("click_sounds", false)
+                equalizerPreset = settingsPrefs.getInt("equalizer_preset", 0)
+                Toast.makeText(context, "Backup restored. Restart RetroPod to refresh playlists and library settings.", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Invalid RetroPod backup: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     fun loadPlaylists() {
@@ -541,12 +612,18 @@ private fun RetroPodScreen(
             SettingsDialog(
                 haptics = hapticsEnabled, onHaptics = {
                     hapticsEnabled = it
-                    context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).edit().putBoolean("haptics", it).apply()
+                    settingsPrefs.edit().putBoolean("haptics", it).apply()
                 },
                 animations = animationsEnabled, onAnimations = {
                     animationsEnabled = it
-                    context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).edit().putBoolean("animations", it).apply()
+                    settingsPrefs.edit().putBoolean("animations", it).apply()
                 },
+                clickSounds = clickSoundsEnabled, onClickSounds = {
+                    clickSoundsEnabled = it
+                    settingsPrefs.edit().putBoolean("click_sounds", it).apply()
+                },
+                onBackup = { backupLauncher.launch("retropod-backup.json") },
+                onRestore = { restoreLauncher.launch(arrayOf("application/json", "text/*")) },
                 equalizerPreset = equalizerPreset,
                 onEqualizerPreset = { preset ->
                     val applied = PlaybackService.applyEqualizerPreset(preset)
@@ -1168,6 +1245,8 @@ private fun FullPlayer(
 private fun SettingsDialog(
     haptics: Boolean, onHaptics: (Boolean) -> Unit,
     animations: Boolean, onAnimations: (Boolean) -> Unit,
+    clickSounds: Boolean, onClickSounds: (Boolean) -> Unit,
+    onBackup: () -> Unit, onRestore: () -> Unit,
     equalizerPreset: Int, onEqualizerPreset: (Int) -> Unit,
     onRescan: () -> Unit, onDismiss: () -> Unit
 ) {
@@ -1195,6 +1274,8 @@ private fun SettingsDialog(
             SettingSwitch("Haptic feedback", "Subtle tactile response on controls and gestures", haptics, onHaptics)
             Divider(color = Color.White.copy(alpha = .08f))
             SettingSwitch("Smooth animations", "Cover flow and screen transitions", animations, onAnimations)
+            Divider(color = Color.White.copy(alpha = .08f))
+            SettingSwitch("Interface click sounds", "Play a subtle system click on controls", clickSounds, onClickSounds)
             Spacer(Modifier.height(20.dp))
             Text("AUDIO", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
             Spacer(Modifier.height(10.dp))
@@ -1216,6 +1297,12 @@ private fun SettingsDialog(
                 }
                 Icon(Icons.Default.ChevronRight, null, tint = Muted)
             }
+            Spacer(Modifier.height(20.dp))
+            Text("BACKUP & RESTORE", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+            Spacer(Modifier.height(10.dp))
+            SettingsActionRow("Export backup", "Save settings, favorites, and playlists as JSON", Icons.Default.Upload, onBackup)
+            Spacer(Modifier.height(8.dp))
+            SettingsActionRow("Restore backup", "Import a previously exported RetroPod backup", Icons.Default.Download, onRestore)
             Spacer(Modifier.height(24.dp))
             Text("ABOUT", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
             Spacer(Modifier.height(10.dp))

@@ -13,3 +13,5 @@ Each stage ZIP is cumulative and retains all previous stage changes.
 
 ## Quality gate
 Keep previous changes; inspect source/resource references; run available static checks and ZIP integrity checks; run Gradle builds and device/emulator tests when an Android build environment is available; disclose anything not tested.
+
+9. **Final integration and quality review** — source/config audit, CI artifact naming, build instructions, and device QA checklist. (This archive; build/device verification still pending.)
