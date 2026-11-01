@@ -1,77 +1,120 @@
 package com.retropod.player
 
 import android.Manifest
+import android.app.Activity
 import android.content.ComponentName
-import android.content.ContentUris
-import android.content.pm.PackageManager
-import android.database.Cursor
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
-import android.os.Build
+import android.content.Intent
 import android.os.Bundle
-import android.provider.MediaStore
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
-import java.util.concurrent.TimeUnit
-
-private val Night = Color(0xFF000000)
-private val SurfaceNight = Color(0xFF151515)
-private val Mint = Color(0xFFE4E4E4)
-private val Muted = Color(0xFF888888)
-private val White = Color(0xFFF5F5F5)
 
 class MainActivity : ComponentActivity() {
     private var controller by mutableStateOf<MediaController?>(null)
     private var controllerFuture: com.google.common.util.concurrent.ListenableFuture<MediaController>? = null
+    private var openPlayerRequest by mutableIntStateOf(0)
+    private var startedFromNotification = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.statusBarColor = android.graphics.Color.BLACK
+        window.navigationBarColor = android.graphics.Color.BLACK
+        AppContextHolder.context = applicationContext
+        if (intent?.getBooleanExtra(EXTRA_OPEN_PLAYER, false) == true) {
+            startedFromNotification = true
+            openPlayerRequest = 1
+        }
+        setContent {
+            RetroPodTheme {
+                RetroPodApp(
+                    controller = controller,
+                    openPlayerRequest = openPlayerRequest,
+                    showSplash = !startedFromNotification && savedInstanceState == null
+                )
+            }
+        }
+    }
+
+    /** Called when the notification is tapped while RetroPod is already running (launchMode=singleTop). */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_OPEN_PLAYER, false)) openPlayerRequest += 1
+    }
 
     override fun onStart() {
         super.onStart()
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
-        controllerFuture = MediaController.Builder(this, token).buildAsync()
-        controllerFuture?.addListener({
-            try { controller = controllerFuture?.get() } catch (_: Exception) { controller = null }
+        val future = MediaController.Builder(this, token).buildAsync()
+        controllerFuture = future
+        future.addListener({
+            try { controller = future.get() } catch (_: Exception) { controller = null }
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -81,622 +124,287 @@ class MainActivity : ComponentActivity() {
         controllerFuture = null
         super.onStop()
     }
-
-    private fun audioPermission(): String =
-        if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO
-        else Manifest.permission.READ_EXTERNAL_STORAGE
-
-    private fun hasAudioPermission(): Boolean =
-        ContextCompat.checkSelfPermission(this, audioPermission()) == PackageManager.PERMISSION_GRANTED
-
-    private fun readLibrary(): List<Song> {
-        if (!hasAudioPermission()) return emptyList()
-        val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.DURATION
-        )
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
-        val songs = mutableListOf<Song>()
-        val cursor: Cursor? = contentResolver.query(collection, projection, selection, null, sortOrder)
-        cursor?.use {
-            val idCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val albumCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-            val durationCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            while (it.moveToNext()) {
-                val id = it.getLong(idCol)
-                songs += Song(
-                    id = id,
-                    title = it.getString(titleCol) ?: "Unknown title",
-                    artist = it.getString(artistCol)?.takeIf { value -> value != "<unknown>" } ?: "Unknown artist",
-                    album = it.getString(albumCol)?.takeIf { value -> value != "<unknown>" } ?: "Unknown album",
-                    durationMs = it.getLong(durationCol),
-                    uri = ContentUris.withAppendedId(collection, id)
-                )
-            }
-        }
-        return songs
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        window.statusBarColor = android.graphics.Color.BLACK
-        window.navigationBarColor = android.graphics.Color.BLACK
-        setContent {
-            RetroPodTheme {
-                RetroPodScreen(
-                    controller = controller,
-                    hasPermission = ::hasAudioPermission,
-                    requestPermission = { requestPermissions(arrayOf(audioPermission()), 81) },
-                    readLibrary = ::readLibrary
-                )
-            }
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 81 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) recreate()
-    }
 }
 
 @Composable
 private fun RetroPodTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = Mint,
-            onPrimary = Night,
-            background = Night,
-            surface = SurfaceNight,
-            onSurface = White,
-            onBackground = White
+            primary = Accent, onPrimary = Night, secondary = Muted,
+            background = Night, surface = SurfaceNight, onSurface = White,
+            onBackground = White, surfaceVariant = SurfaceRaised
         ),
         content = content
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RetroPodScreen(
-    controller: MediaController?,
-    hasPermission: () -> Boolean,
-    requestPermission: () -> Unit,
-    readLibrary: () -> List<Song>
-) {
-    var songs by remember { mutableStateOf(emptyList<Song>()) }
-    var query by remember { mutableStateOf("") }
-    var tab by remember { mutableStateOf(0) }
-    var showPlayer by remember { mutableStateOf(false) }
-    var currentUri by remember { mutableStateOf<String?>(null) }
-    var currentIndex by remember { mutableIntStateOf(0) }
-    var queueSongs by remember { mutableStateOf(emptyList<Song>()) }
+private fun RetroPodApp(controller: MediaController?, openPlayerRequest: Int, showSplash: Boolean) {
+    val context = LocalContext.current
+    val view = LocalView.current
     val scope = rememberCoroutineScope()
-    var isPlaying by remember { mutableStateOf(false) }
-    var position by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
-    var currentTitle by remember { mutableStateOf("Nothing playing") }
-    var currentArtist by remember { mutableStateOf("Choose a song from your library") }
-    val filtered = remember(songs, query) {
-        songs.filter {
-            it.title.contains(query, true) || it.artist.contains(query, true) || it.album.contains(query, true)
-        }
-    }
-    val albums = remember(filtered) { filtered.groupBy { it.album }.entries.toList() }
+    val state = remember { AppState(context, scope, view) }
+    SideEffect { state.controller = controller }
 
+    // ---- activity-result launchers
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        state.permissionGranted = state.hasAudioPermission()
+        if (state.permissionGranted) state.refreshLibrary()
+        else state.toast("Audio permission is needed to scan your music.", long = true)
+    }
+    val micLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        state.micGranted = granted
+        if (!granted) state.toast("Without it the visualizer uses a simulated animation.")
+    }
+    val lyricsPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) state.importLyrics(uri)
+    }
+    val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) state.exportBackup(uri)
+    }
+    val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) state.restoreBackup(uri)
+    }
+    val deleteLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        state.onDeleteResult(result.resultCode == Activity.RESULT_OK)
+    }
+    state.requestPermissions = {
+        val missing = state.missingPermissions()
+        if (missing.isNotEmpty()) permissionLauncher.launch(missing)
+        else state.refreshLibrary()
+    }
+    state.requestMic = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) }
+    state.pickLyrics = { lyricsPicker.launch(arrayOf("text/plain", "application/octet-stream", "application/x-subrip", "text/*")) }
+    state.launchBackup = { backupLauncher.launch("retropod-backup.json") }
+    state.launchRestore = { restoreLauncher.launch(arrayOf("application/json", "text/*")) }
+    state.launchDelete = { sender -> deleteLauncher.launch(IntentSenderRequest.Builder(sender).build()) }
+
+    // ---- start-up work
+    var splashVisible by remember { mutableStateOf(showSplash) }
     LaunchedEffect(Unit) {
-        if (hasPermission()) songs = withContext(Dispatchers.IO) { readLibrary() }
+        state.loadLyricsFor(null)
+        if (state.hasAudioPermission()) state.refreshLibrary()
+        val missing = state.missingPermissions()
+        if (missing.isNotEmpty()) {
+            delay(if (showSplash) 1700L else 200L)
+            permissionLauncher.launch(missing)
+        }
     }
-    LaunchedEffect(controller) {
-        while (true) {
-            controller?.let { player ->
-                isPlaying = player.isPlaying
-                position = player.currentPosition.coerceAtLeast(0L)
-                duration = player.duration.takeIf { it > 0 } ?: 0L
-                currentTitle = player.mediaMetadata.title?.toString() ?: "Nothing playing"
-                currentArtist = player.mediaMetadata.artist?.toString() ?: "Choose a song from your library"
-                currentUri = player.currentMediaItem?.localConfiguration?.uri?.toString()
-                currentIndex = player.currentMediaItemIndex.coerceAtLeast(0)
-            }
-            delay(350)
+    LaunchedEffect(controller) { if (controller != null) state.pollLoop() }
+    LaunchedEffect(state.currentSong?.id) {
+        val song = state.currentSong
+        state.loadLyricsFor(song)
+        if (song != null) state.pushRecent(song.id)
+    }
+
+    // ---- notification tap -> open Now Playing
+    var handledOpen by remember { mutableIntStateOf(0) }
+    LaunchedEffect(openPlayerRequest, state.queue.size) {
+        if (openPlayerRequest > handledOpen && state.queue.isNotEmpty()) {
+            handledOpen = openPlayerRequest
+            splashVisible = false
+            state.openPlayer()
         }
     }
 
-    fun playFrom(index: Int, list: List<Song> = filtered) {
-        val p = controller ?: return
-        if (list.isEmpty()) return
-        queueSongs = list
-        val items = list.map { song ->
-            MediaItem.Builder()
-                .setUri(song.uri)
-                .setMediaId(song.id.toString())
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(song.title)
-                        .setArtist(song.artist)
-                        .setAlbumTitle(song.album)
-                        .build()
-                ).build()
-        }
-        p.setMediaItems(items, index.coerceIn(items.indices), 0L)
-        p.prepare()
-        p.play()
-        showPlayer = true
-    }
-
-    Box(
-        Modifier.fillMaxSize().background(Color.Black)
-    ) {
-        Column(
-            Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Row(
-                Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 17.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("RETROPOD", color = Mint, fontSize = 17.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                    Text("YOUR MUSIC, REWOUND", color = Muted, fontSize = 9.sp, letterSpacing = 2.4.sp)
-                }
-                Icon(Icons.Default.GraphicEq, null, tint = Mint, modifier = Modifier.size(27.dp))
-            }
-
-            if (!hasPermission()) {
-                EmptyPermission(requestPermission)
-            } else if (showPlayer) {
-                FullPlayer(
-                    songs = queueSongs,
-                    currentIndex = currentIndex,
-                    controller = controller,
-                    isPlaying = isPlaying,
-                    position = position,
-                    duration = duration,
-                    currentTitle = currentTitle,
-                    currentArtist = currentArtist,
-                    onBack = { showPlayer = false },
-                    onPlayPause = { if (controller?.isPlaying == true) controller?.pause() else controller?.play() },
-                    onPrevious = { controller?.seekToPreviousMediaItem() },
-                    onNext = { controller?.seekToNextMediaItem() },
-                    onSeek = { controller?.seekTo(it) }
-                )
+    // ---- back handling
+    BackHandler(enabled = !splashVisible) {
+        if (!state.handleBack()) {
+            val now = System.currentTimeMillis()
+            if (now - state.lastBackAt < 2000L) {
+                (context as? Activity)?.finish()
             } else {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    placeholder = { Text("Search songs, albums, artists", color = Muted) },
-                    leadingIcon = { Icon(Icons.Default.Search, null, tint = Muted) },
-                    trailingIcon = {
-                        if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Default.Close, null, tint = Muted)
-                        }
+                state.lastBackAt = now
+                state.toast("Press Back again to exit RetroPod")
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(Night)) {
+        Box(Modifier.fillMaxSize().systemBarsPadding()) {
+            MainScaffold(state)
+            OverlayHost(state)
+            state.menuSong?.let { SongContextMenu(state, it) }
+            AppDialogs(state)
+        }
+        AnimatedVisibility(visible = splashVisible, enter = EnterTransition.None, exit = fadeOut(tween(450))) {
+            Box(Modifier.fillMaxSize().systemBarsPadding().background(Night)) {
+                SplashScreen(onDone = { splashVisible = false })
+            }
+        }
+    }
+}
+
+// ============================================================================ main tabs + nav
+
+@Composable
+private fun MainScaffold(state: AppState) {
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            AnimatedContent(
+                targetState = state.tab,
+                transitionSpec = {
+                    if (state.animationsEnabled) fadeIn(tween(220)) togetherWith fadeOut(tween(140))
+                    else EnterTransition.None togetherWith ExitTransition.None
+                },
+                label = "tabs"
+            ) { tab ->
+                when (tab) {
+                    Tab.HOME -> HomeTab(state)
+                    Tab.SONGS -> SongsTab(state)
+                    Tab.ALBUMS -> AlbumsTab(state)
+                    Tab.PLAYLISTS -> PlaylistsTab(state)
+                    Tab.SEARCH -> SearchTab(state)
+                }
+            }
+        }
+        MiniPlayer(state)
+        BottomNav(state)
+    }
+}
+
+@Composable
+private fun BottomNav(state: AppState) {
+    val items: List<Pair<Tab, ImageVector>> = listOf(
+        Tab.HOME to Icons.Default.Home,
+        Tab.SONGS to Icons.Default.MusicNote,
+        Tab.ALBUMS to Icons.Default.Album,
+        Tab.PLAYLISTS to Icons.Default.QueueMusic,
+        Tab.SEARCH to Icons.Default.Search
+    )
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically
+    ) {
+        items.forEach { (tab, icon) ->
+            val selected = state.tab == tab
+            Box(
+                Modifier.size(50.dp).clip(CircleShape)
+                    .background(if (selected) Color(0x24FFFFFF) else Color.Transparent)
+                    .border(1.dp, if (selected) Color(0x66FFFFFF) else Color.Transparent, CircleShape)
+                    .clickable {
+                        if (tab == Tab.SONGS && state.tab != Tab.SONGS) state.songFilter = SongFilter.ALL
+                        state.tab = tab
+                        state.tick()
                     },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Mint,
-                        unfocusedBorderColor = Muted.copy(alpha = .3f),
-                        focusedTextColor = White,
-                        unfocusedTextColor = White,
-                        cursorColor = Mint
-                    )
-                )
-                Spacer(Modifier.height(14.dp))
-                TabRow(
-                    selectedTabIndex = tab,
-                    containerColor = Color.Transparent,
-                    contentColor = Mint,
-                    divider = {}
-                ) {
-                    Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("ALBUMS", letterSpacing = 1.5.sp) })
-                    Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("SONGS", letterSpacing = 1.5.sp) })
-                }
-                if (tab == 0) {
-                    if (albums.isEmpty()) {
-                        EmptyLibrary { scope.launch { songs = withContext(Dispatchers.IO) { readLibrary() } } }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(top = 16.dp, bottom = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(15.dp)
-                        ) {
-                            itemsIndexed(albums) { albumIndex, entry ->
-                                val albumSongs = entry.value
-                                AlbumRow(
-                                    album = entry.key,
-                                    artist = albumSongs.firstOrNull()?.artist ?: "Unknown artist",
-                                    songCount = albumSongs.size,
-                                    representative = albumSongs.firstOrNull(),
-                                    artIndex = albumIndex,
-                                    onClick = { playFrom(0, albumSongs); showPlayer = true }
-                                )
-                            }
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        contentPadding = PaddingValues(top = 10.dp, bottom = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        itemsIndexed(filtered) { index, song ->
-                            SongRow(song, index, onClick = { playFrom(index) })
-                        }
-                    }
-                }
-                MiniPlayer(
-                    title = currentTitle,
-                    artist = currentArtist,
-                    playing = isPlaying,
-                    onOpen = { showPlayer = true },
-                    onPlayPause = { if (controller?.isPlaying == true) controller.pause() else controller?.play() },
-                    onNext = { controller?.seekToNextMediaItem() }
-                )
-            }
-            Text(
-                "MADE FOR THE LOVE OF MUSIC",
-                color = Muted.copy(alpha = .55f),
-                fontSize = 8.sp,
-                letterSpacing = 2.sp,
-                modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun HomeDashboard(
-    modifier: Modifier = Modifier,
-    songs: List<Song>,
-    albums: List<Map.Entry<String, List<Song>>>,
-    onPlaySong: (Song) -> Unit,
-    onOpenSongs: () -> Unit,
-    onOpenAlbums: () -> Unit
-) {
-    val pager = rememberPagerState(pageCount = { albums.size.coerceAtLeast(1) })
-    LazyColumn(
-        modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(bottom = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(17.dp)
-    ) {
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("Good evening", color = White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-                Text("Your music, your moment.", color = Muted, fontSize = 13.sp)
-            }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                DashboardCard("Songs", songs.size.toString(), Icons.Default.MusicNote,
-                    Modifier.weight(1f), onOpenSongs)
-                DashboardCard("Albums", albums.size.toString(), Icons.Default.Album,
-                    Modifier.weight(1f), onOpenAlbums)
-            }
-        }
-        item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Recently added", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f))
-                Text("YOUR LIBRARY", color = Muted, fontSize = 9.sp, letterSpacing = 1.sp)
-            }
-        }
-        if (songs.isNotEmpty()) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                    songs.take(3).forEachIndexed { index, song ->
-                        Column(Modifier.weight(1f).clickable { onPlaySong(song) }) {
-                            AlbumArtwork(song, index, Modifier.fillMaxWidth().aspectRatio(1f))
-                            Spacer(Modifier.height(6.dp))
-                            Text(song.title, color = White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(song.artist, color = Muted, fontSize = 9.sp,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-            }
-        }
-        item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Your albums", color = White, fontSize = 17.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f))
-                Text("SWIPE TO EXPLORE", color = Muted, fontSize = 9.sp, letterSpacing = .8.sp)
-            }
-        }
-        if (albums.isNotEmpty()) {
-            item {
-                HorizontalPager(
-                    state = pager,
-                    contentPadding = PaddingValues(horizontal = 58.dp),
-                    pageSpacing = 12.dp,
-                    modifier = Modifier.fillMaxWidth().height(290.dp)
-                ) { page ->
-                    val entry = albums[page]
-                    val artScale by animateFloatAsState(
-                        if (page == pager.currentPage) 1f else .82f,
-                        animationSpec = tween(350), label = "homeCoverScale"
-                    )
-                    Column(
-                        Modifier.fillMaxSize().scale(artScale).clickable {
-                            entry.value.firstOrNull()?.let(onPlaySong)
-                        },
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        AlbumArtwork(entry.value.firstOrNull(), page,
-                            Modifier.fillMaxWidth().weight(1f))
-                        Spacer(Modifier.height(10.dp))
-                        Text(entry.key, color = White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(entry.value.firstOrNull()?.artist ?: "Unknown artist",
-                            color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
-            }
-        } else {
-            item {
-                Text("Add music to your device and refresh your library.",
-                    color = Muted, fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun DashboardCard(
-    title: String,
-    count: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    modifier: Modifier,
-    onClick: () -> Unit
-) {
-    Column(
-        modifier.clip(RoundedCornerShape(22.dp)).background(Color(0xFF121212))
-            .clickable(onClick = onClick).padding(15.dp).heightIn(min = 94.dp),
-        verticalArrangement = Arrangement.SpaceBetween
-    ) {
-        Icon(icon, null, tint = White, modifier = Modifier.size(23.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, color = White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Text(count, color = Muted, fontSize = 11.sp)
-        }
-    }
-}
-
-@Composable
-private fun EmptyPermission(onGrant: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().padding(bottom = 70.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(Icons.Default.LibraryMusic, null, tint = Mint, modifier = Modifier.size(54.dp))
-        Spacer(Modifier.height(18.dp))
-        Text("LET THE MUSIC IN", color = White, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-        Text("Allow audio access to find music stored on your phone.", color = Muted, modifier = Modifier.padding(18.dp))
-        Button(onClick = onGrant, colors = ButtonDefaults.buttonColors(containerColor = Mint)) {
-            Text("ALLOW MUSIC ACCESS", color = Night)
-        }
-    }
-}
-
-@Composable
-private fun EmptyLibrary(onRefresh: () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().padding(top = 70.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(Icons.Default.MusicOff, null, tint = Mint, modifier = Modifier.size(45.dp))
-        Spacer(Modifier.height(14.dp))
-        Text("YOUR LIBRARY IS QUIET", color = White, fontWeight = FontWeight.Bold)
-        Text("Add audio files to your phone, then refresh.", color = Muted, modifier = Modifier.padding(12.dp))
-        OutlinedButton(onClick = onRefresh) { Text("REFRESH LIBRARY") }
-    }
-}
-
-@Composable
-private fun AlbumRow(
-    album: String,
-    artist: String,
-    songCount: Int,
-    representative: Song?,
-    artIndex: Int,
-    onClick: () -> Unit
-) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-            .background(Color.White.copy(alpha = .055f))
-            .clickable(onClick = onClick).padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AlbumArtwork(representative, artIndex, Modifier.size(88.dp))
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(album, color = White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(artist, color = Muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("$songCount ${if (songCount == 1) "TRACK" else "TRACKS"}", color = Mint, fontSize = 9.sp, letterSpacing = 1.5.sp)
-        }
-        Icon(Icons.Default.ChevronRight, null, tint = Muted)
-    }
-}
-
-@Composable
-private fun SongRow(song: Song, index: Int, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text((index + 1).toString().padStart(2, '0'), color = Muted, fontSize = 11.sp, modifier = Modifier.width(32.dp))
-        Column(Modifier.weight(1f)) {
-            Text(song.title, color = White, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${song.artist}  •  ${song.album}", color = Muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Text(formatTime(song.durationMs), color = Muted, fontSize = 10.sp)
-    }
-}
-
-@Composable
-private fun MiniPlayer(
-    title: String,
-    artist: String,
-    playing: Boolean,
-    onOpen: () -> Unit,
-    onPlayPause: () -> Unit,
-    onNext: () -> Unit
-) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(SurfaceNight)
-            .clickable(onClick = onOpen).padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)).background(Brush.linearGradient(listOf(Mint, Color(0xFF426C76)))),
-            contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.Album, null, tint = Night)
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, color = White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(artist, color = Muted, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        IconButton(onClick = onPlayPause) {
-            Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Mint)
-        }
-        IconButton(onClick = onNext) { Icon(Icons.Default.SkipNext, null, tint = White) }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun FullPlayer(
-    songs: List<Song>,
-    currentIndex: Int,
-    controller: MediaController?,
-    isPlaying: Boolean,
-    position: Long,
-    duration: Long,
-    currentTitle: String,
-    currentArtist: String,
-    onBack: () -> Unit,
-    onPlayPause: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    onSeek: (Long) -> Unit
-) {
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.KeyboardArrowDown, null, tint = White) }
-            Text("NOW PLAYING", color = Muted, fontSize = 10.sp, letterSpacing = 3.sp, modifier = Modifier.weight(1f))
-            Icon(Icons.Default.MoreHoriz, null, tint = Muted)
-        }
-        Spacer(Modifier.height(12.dp))
-        val safeCount = songs.size.coerceAtLeast(1)
-        val pager = rememberPagerState(
-            initialPage = currentIndex.coerceIn(0, safeCount - 1),
-            pageCount = { safeCount }
-        )
-        LaunchedEffect(currentIndex, safeCount) {
-            if (pager.currentPage != currentIndex.coerceIn(0, safeCount - 1)) {
-                pager.animateScrollToPage(currentIndex.coerceIn(0, safeCount - 1))
-            }
-        }
-        LaunchedEffect(pager.currentPage) {
-            if (songs.isNotEmpty() && pager.currentPage != currentIndex) {
-                controller?.seekTo(pager.currentPage, 0L)
-            }
-        }
-        HorizontalPager(
-            state = pager,
-            contentPadding = PaddingValues(horizontal = 34.dp),
-            pageSpacing = 14.dp,
-            modifier = Modifier.fillMaxWidth().height(300.dp)
-        ) { page ->
-            val song = songs.getOrNull(page)
-            val artIndex = (song?.album?.hashCode()?.ushr(1) ?: page) % 4
-            val pageScale by animateFloatAsState(
-                targetValue = if (page == pager.currentPage) 1f else .86f,
-                animationSpec = tween(420, easing = FastOutSlowInEasing),
-                label = "coverFlowScale"
-            )
-            AlbumArtwork(song, artIndex, Modifier.fillMaxSize().scale(pageScale))
-        }
-        val currentSong = songs.getOrNull(currentIndex)
-        Spacer(Modifier.height(25.dp))
-        Text(currentTitle, color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(currentArtist, color = Muted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
-        Spacer(Modifier.height(22.dp))
-        Slider(
-            value = if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f,
-            onValueChange = { fraction -> if (duration > 0) onSeek((fraction * duration).toLong()) },
-            colors = SliderDefaults.colors(thumbColor = Mint, activeTrackColor = Mint, inactiveTrackColor = Muted.copy(alpha = .3f))
-        )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatTime(position), color = Muted, fontSize = 10.sp)
-            Text(formatTime(duration), color = Muted, fontSize = 10.sp)
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-            IconButton(onClick = onPrevious, modifier = Modifier.size(58.dp)) {
-                Icon(Icons.Default.SkipPrevious, null, tint = White, modifier = Modifier.size(34.dp))
-            }
-            Spacer(Modifier.width(24.dp))
-            IconButton(
-                onClick = onPlayPause,
-                modifier = Modifier.size(74.dp).clip(CircleShape).background(Mint)
+                contentAlignment = Alignment.Center
             ) {
-                AnimatedContent(isPlaying, label = "playPauseIcon") { playing ->
-                    Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Night, modifier = Modifier.size(42.dp))
-                }
-            }
-            Spacer(Modifier.width(24.dp))
-            IconButton(onClick = onNext, modifier = Modifier.size(58.dp)) {
-                Icon(Icons.Default.SkipNext, null, tint = White, modifier = Modifier.size(34.dp))
+                Icon(icon, contentDescription = tab.name.lowercase(), tint = if (selected) White else Muted, modifier = Modifier.size(25.dp))
             }
         }
-        Spacer(Modifier.weight(1f))
-        Text("SWIPE THROUGH YOUR MUSIC", color = Muted, fontSize = 9.sp, letterSpacing = 2.sp)
-        Spacer(Modifier.height(12.dp))
     }
 }
+
+// ============================================================================ overlays
 
 @Composable
-private fun AlbumArtwork(song: Song?, artIndex: Int, modifier: Modifier = Modifier) {
-    val embedded by produceState<Bitmap?>(initialValue = null, key1 = song?.uri) {
-        value = song?.let { selected ->
-            withContext(Dispatchers.IO) {
-                try {
-                    val retriever = MediaMetadataRetriever()
-                    retriever.setDataSource(AppContextHolder.context, selected.uri)
-                    val bytes = retriever.embeddedPicture
-                    retriever.release()
-                    if (bytes != null) BitmapFactory.decodeByteArray(bytes, 0, bytes.size) else null
-                } catch (_: Exception) { null }
+private fun OverlayHost(state: AppState) {
+    val top = state.overlays.lastOrNull()
+    AnimatedContent(
+        targetState = top,
+        transitionSpec = {
+            if (!state.animationsEnabled) {
+                EnterTransition.None togetherWith ExitTransition.None
+            } else if (targetState != null) {
+                (slideInVertically(tween(320)) { it / 4 } + fadeIn(tween(260))) togetherWith fadeOut(tween(200))
+            } else {
+                fadeIn(tween(1)) togetherWith (slideOutVertically(tween(280)) { it / 4 } + fadeOut(tween(240)))
+            }
+        },
+        label = "overlays"
+    ) { overlay ->
+        if (overlay == null) {
+            Spacer(Modifier.fillMaxSize())
+        } else {
+            Box(
+                Modifier.fillMaxSize().background(Night).pointerInput(Unit) { detectTapGestures { } }
+            ) {
+                when (overlay) {
+                    Overlay.PLAYER -> NowPlayingScreen(state)
+                    Overlay.VISUALIZER -> VisualizerScreen(state)
+                    Overlay.EQUALIZER -> EqualizerScreen(state)
+                    Overlay.LYRICS -> LyricsQueueScreen(state)
+                    Overlay.SLEEP -> SleepTimerScreen(state)
+                    Overlay.SETTINGS -> SettingsScreen(state)
+                    Overlay.PLAYLIST_DETAIL -> PlaylistDetailScreen(state)
+                }
             }
         }
     }
-    val fallback = listOf(
-        R.drawable.cover_aurora, R.drawable.cover_sunset, R.drawable.cover_neon, R.drawable.cover_mono
-    )[Math.floorMod(artIndex, 4)]
-    Box(modifier.clip(RoundedCornerShape(24.dp)).background(SurfaceNight)) {
-        if (embedded != null) {
-            Image(embedded!!.asImageBitmap(), contentDescription = "Album artwork", modifier = Modifier.fillMaxSize())
-        } else {
-            Image(painter = androidx.compose.ui.res.painterResource(fallback), contentDescription = "RetroPod artwork", modifier = Modifier.fillMaxSize())
-        }
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .12f)))))
+}
+
+// ============================================================================ dialogs
+
+@Composable
+private fun AppDialogs(state: AppState) {
+    if (state.showCreatePlaylist) {
+        var name by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { state.showCreatePlaylist = false; state.pendingPlaylistSong = null },
+            containerColor = SurfaceNight,
+            title = { Text("Create playlist", color = White) },
+            text = {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it.take(40) }, singleLine = true, label = { Text("Playlist name") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = White, unfocusedTextColor = White, focusedBorderColor = Accent, unfocusedBorderColor = Muted
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val trimmed = name.trim()
+                    if (state.createPlaylist(trimmed)) {
+                        state.pendingPlaylistSong?.let { state.addToPlaylist(it, trimmed) }
+                        state.pendingPlaylistSong = null
+                        state.showCreatePlaylist = false
+                        if (state.overlays.isEmpty()) state.tab = Tab.PLAYLISTS
+                    } else state.toast("Enter a unique playlist name.")
+                }) { Text("Create", color = Accent) }
+            },
+            dismissButton = {
+                TextButton(onClick = { state.showCreatePlaylist = false; state.pendingPlaylistSong = null }) { Text("Cancel", color = Muted) }
+            }
+        )
     }
-}
-
-object AppContextHolder {
-    lateinit var context: android.content.Context
-}
-
-private fun formatTime(ms: Long): String {
-    val seconds = TimeUnit.MILLISECONDS.toSeconds(ms.coerceAtLeast(0L))
-    return "%d:%02d".format(seconds / 60, seconds % 60)
+    state.renamePlaylistFrom?.let { oldName ->
+        var newName by remember(oldName) { mutableStateOf(oldName) }
+        AlertDialog(
+            onDismissRequest = { state.renamePlaylistFrom = null },
+            containerColor = SurfaceNight,
+            title = { Text("Rename playlist", color = White) },
+            text = {
+                OutlinedTextField(
+                    value = newName, onValueChange = { newName = it.take(40) }, singleLine = true, label = { Text("New name") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = White, unfocusedTextColor = White, focusedBorderColor = Accent, unfocusedBorderColor = Muted
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (state.renamePlaylist(oldName, newName)) state.renamePlaylistFrom = null
+                    else state.toast("Choose a unique playlist name.")
+                }) { Text("Save", color = Accent) }
+            },
+            dismissButton = { TextButton(onClick = { state.renamePlaylistFrom = null }) { Text("Cancel", color = Muted) } }
+        )
+    }
+    state.detailsSong?.let { song ->
+        AlertDialog(
+            onDismissRequest = { state.detailsSong = null },
+            containerColor = SurfaceNight,
+            title = { Text("Song details", color = White) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(song.title, color = White, fontWeight = FontWeight.Bold)
+                    Text("Artist: ${song.artist}", color = Muted)
+                    Text("Album: ${song.album}", color = Muted)
+                    Text("Duration: ${formatTime(song.durationMs)}", color = Muted)
+                    if (song.path.isNotBlank()) Text("Location: ${song.path}", color = Muted, fontSize = 12.sp)
+                }
+            },
+            confirmButton = { TextButton(onClick = { state.detailsSong = null }) { Text("Done", color = Accent) } }
+        )
+    }
 }

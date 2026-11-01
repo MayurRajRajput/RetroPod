@@ -1,22 +1,16 @@
-Project root:
-  settings.gradle.kts
-  build.gradle.kts
-  gradle.properties
-  .gitignore
-  app/
-    build.gradle.kts
-    src/main/AndroidManifest.xml
-    src/main/java/com/retropod/player/
-      MainActivity.kt
-      Song.kt
-      PlaybackService.kt
-      RetroPodApplication.kt
-    src/main/res/drawable-nodpi/
-      cover_aurora.png
-      cover_sunset.png
-      cover_neon.png
-      cover_mono.png
-  .github/workflows/build-apk.yml
-  README.md
+RETROPOD 2.7.0 PROJECT CONTENTS
 
-The cloud build workflow provisions Gradle 8.9; no wrapper JAR is required.
+app/src/main/java/com/retropod/player:
+- MainActivity.kt      Activity, app root, tabs, bottom nav, overlay host, dialogs
+- AppState.kt          Library, playback mirror, settings, playlists, backup, delete
+- PlaybackService.kt   Media3 service: notification tap, equalizer, visualizer, sleep timer
+- Components.kt        Artwork cache, chips, rows, mini player, wave seek bar, sliders, dial
+- ScreenHome.kt        Splash + Home
+- ScreenLibrary.kt     Songs, Search, Cover Flow/Albums, Playlists, context menu
+- ScreenPlayer.kt      Now Playing, Lyrics, Queue
+- ScreenAudio.kt       Visualizer, Equalizer, Sleep Timer
+- ScreenSettings.kt    Settings pages
+- Library.kt           MediaStore scan, lyrics parser, helpers
+- Theme.kt, Song.kt, RetroPodApplication.kt
+
+Build: GitHub Actions (.github/workflows/build-apk.yml) or Android Studio. Not compiled in the authoring environment.
