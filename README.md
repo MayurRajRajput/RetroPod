@@ -29,3 +29,7 @@ See `STAGE-4-LIBRARY.md` for the library/search updates and verification status.
 
 ## Step 5 — Playlist and queue management
 See `STAGE-5-PLAYLIST-QUEUE.md` for the new playlist editing and queue controls, plus verification limitations.
+
+
+## Step 6 — Audio features
+See `STAGE-6-AUDIO.md` for implemented equalizer integration and outstanding audio tasks.

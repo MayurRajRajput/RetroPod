@@ -207,6 +207,7 @@ private fun RetroPodScreen(
     var showQueue by remember { mutableStateOf(false) }
     var hapticsEnabled by remember { mutableStateOf(context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).getBoolean("haptics", true)) }
     var animationsEnabled by remember { mutableStateOf(context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).getBoolean("animations", true)) }
+    var equalizerPreset by remember { mutableIntStateOf(context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).getInt("equalizer_preset", 0)) }
     var volume by remember { mutableFloatStateOf(1f) }
     var shuffleEnabled by remember { mutableStateOf(false) }
     var repeatEnabled by remember { mutableStateOf(false) }
@@ -531,6 +532,14 @@ private fun RetroPodScreen(
                 animations = animationsEnabled, onAnimations = {
                     animationsEnabled = it
                     context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).edit().putBoolean("animations", it).apply()
+                },
+                equalizerPreset = equalizerPreset,
+                onEqualizerPreset = { preset ->
+                    val applied = PlaybackService.applyEqualizerPreset(preset)
+                    if (applied) {
+                        equalizerPreset = preset
+                        context.getSharedPreferences("retropod_settings", Context.MODE_PRIVATE).edit().putInt("equalizer_preset", preset).apply()
+                    } else Toast.makeText(context, "Start playback before enabling the equalizer.", Toast.LENGTH_SHORT).show()
                 },
                 onRescan = { refreshLibrary(); showSettings = false },
                 onDismiss = { showSettings = false }
@@ -1145,6 +1154,7 @@ private fun FullPlayer(
 private fun SettingsDialog(
     haptics: Boolean, onHaptics: (Boolean) -> Unit,
     animations: Boolean, onAnimations: (Boolean) -> Unit,
+    equalizerPreset: Int, onEqualizerPreset: (Int) -> Unit,
     onRescan: () -> Unit, onDismiss: () -> Unit
 ) {
     // Dedicated full-screen settings destination; intentionally not an AlertDialog.
@@ -1171,6 +1181,10 @@ private fun SettingsDialog(
             SettingSwitch("Haptic feedback", "Subtle tactile response on controls and gestures", haptics, onHaptics)
             Divider(color = Color.White.copy(alpha = .08f))
             SettingSwitch("Smooth animations", "Cover flow and screen transitions", animations, onAnimations)
+            Spacer(Modifier.height(20.dp))
+            Text("AUDIO", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
+            Spacer(Modifier.height(10.dp))
+            EqualizerPresetRow(equalizerPreset = equalizerPreset, onSelect = onEqualizerPreset)
             Spacer(Modifier.height(24.dp))
             Text("MUSIC LIBRARY", color = Muted, fontSize = 10.sp, letterSpacing = 2.sp)
             Spacer(Modifier.height(10.dp))
@@ -1195,6 +1209,31 @@ private fun SettingsDialog(
             Text("A local music player, made for the love of music.", color = Muted, fontSize = 12.sp)
             Spacer(Modifier.weight(1f))
             Text("PURE BLACK • LOCAL MUSIC • NO DISTRACTIONS", color = Muted, fontSize = 9.sp, letterSpacing = 1.sp)
+        }
+    }
+}
+
+@Composable
+private fun EqualizerPresetRow(equalizerPreset: Int, onSelect: (Int) -> Unit) {
+    val context = LocalContext.current
+    var expanded by remember { mutableStateOf(false) }
+    val presets = PlaybackService.equalizerPresetNames()
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(SurfaceNight)
+            .clickable { expanded = true }.padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("System equalizer", color = White, fontWeight = FontWeight.Medium)
+            Text("Uses Android audio effects on the active player", color = Muted, fontSize = 11.sp)
+        }
+        Text(presets.getOrNull(equalizerPreset) ?: "Choose", color = Accent, fontSize = 12.sp)
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (presets.isEmpty()) {
+                DropdownMenuItem(text = { Text("Start playback first") }, onClick = { expanded = false })
+            } else presets.forEachIndexed { index, name ->
+                DropdownMenuItem(text = { Text(name) }, onClick = { onSelect(index); expanded = false })
+            }
         }
     }
 }
