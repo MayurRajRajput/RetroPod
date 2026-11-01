@@ -8,5 +8,6 @@
         <item name="android:navigationBarColor">@color/retropod_black</item>
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">@color/retropod_black</item>
     </style>
 </resources>
